@@ -15,7 +15,7 @@
 
 extern void sceKernelSetProcessName(const char *name);
 
-#define VERSION   "0.1.3"
+#define VERSION   "0.1.4"
 #define STATE_DIR "/data/fgg-playpods-gui"
 #define LOG_PATH  STATE_DIR "/gui-playpods.log"
 #define LOCK_PATH STATE_DIR "/gui-playpods.lock"
@@ -77,13 +77,10 @@ int main(void)
         goto out;
     }
 
-    /* The GUI now owns the session. Nothing connects automatically. */
     gui_set_status(GUI_STATUS_STARTING);
 
     while (running) {
         gui_action action;
-
-        /* GUI owns the display/input loop. Keep it ticking continuously. */
         gui_tick();
         bt_poll(16);
         action = gui_take_action();
@@ -94,11 +91,10 @@ int main(void)
         }
 
         if (action == GUI_ACTION_SCAN) {
-            if (bt_scan_start()) {
+            if (bt_scan_start())
                 gui_set_status(GUI_STATUS_SCANNING);
-            } else {
+            else
                 gui_set_status(GUI_STATUS_ERROR);
-            }
             continue;
         }
 
