@@ -13,7 +13,9 @@
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION   "0.1.2"
+extern void sceKernelSetProcessName(const char *name);
+
+#define VERSION   "0.1.3"
 #define STATE_DIR "/data/fgg-playpods-gui"
 #define LOG_PATH  STATE_DIR "/gui-playpods.log"
 #define LOCK_PATH STATE_DIR "/gui-playpods.lock"
@@ -39,6 +41,11 @@ int main(void)
 {
     int capturing = 0;
     int running = 1;
+
+    /* Payload Manager may load the ELF under the generic payload.elf name.
+     * Set the kernel process name explicitly so the running process is
+     * identifiable regardless of how the loader names the file. */
+    sceKernelSetProcessName("fgg-gui.elf");
 
     if (!log_open(STATE_DIR, LOG_PATH)) return 1;
     if (!gui_init()) {
