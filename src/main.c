@@ -49,6 +49,7 @@ int main(void)
 
     log_line("========================================");
     log_line("FGG-PlayPods-GUI %s", VERSION);
+    notify("FGG-PlayPods-GUI started");
 
     if (!lock_take()) {
         notify("FGG-PlayPods-GUI: already running");
@@ -75,7 +76,9 @@ int main(void)
     while (running) {
         gui_action action;
 
-        bt_poll(100);
+        /* GUI owns the display/input loop. Keep it ticking continuously. */
+        gui_tick();
+        bt_poll(16);
         action = gui_take_action();
 
         if (action == GUI_ACTION_EXIT) {
