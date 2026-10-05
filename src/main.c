@@ -15,7 +15,7 @@
 
 extern void sceKernelSetProcessName(const char *name);
 
-#define VERSION   "0.1.4"
+#define VERSION   "0.1.5"
 #define STATE_DIR "/data/fgg-playpods-gui"
 #define LOG_PATH  STATE_DIR "/gui-playpods.log"
 #define LOCK_PATH STATE_DIR "/gui-playpods.lock"
