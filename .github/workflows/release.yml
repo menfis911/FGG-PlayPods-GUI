@@ -46,7 +46,11 @@ jobs:
 
       - name: Создание metadata
         run: |
-          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ]; then
+            VERSION="v$(cat VERSION)"
+          else
+            VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          fi
           SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
           cat > fgg-playpods-gui.elf.json <<META
           {
@@ -62,18 +66,27 @@ jobs:
           sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
           cat fgg-playpods-gui.elf.json
 
+      - name: Определение версии
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ]; then
+            echo "version=v$(cat VERSION)" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Публикация релиза
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'test') || github.ref_name }}
-          name: FGG-PlayPods-GUI — ${{ github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.version.outputs.version }}
+          name: FGG-PlayPods-GUI — ${{ steps.version.outputs.version }}
           generate_release_notes: false
           files: |
             fgg-playpods-gui.elf
             fgg-playpods-gui.elf.json
             SHA256SUMS
           body: |
-            ## FGG-PlayPods-GUI — тестовая сборка
+            ## FGG-PlayPods-GUI — версия ${{ steps.version.outputs.version }}
 
             Обновлённая тестовая версия GUI-форка FGG-PlayPods.
 
