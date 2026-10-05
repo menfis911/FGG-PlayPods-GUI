@@ -1,4 +1,48 @@
-name: Release
+name: Релиз          body: |
+            ## FGG-PlayPods-GUI — тестовая сборка
+
+            Экспериментальная полноэкранная GUI-версия FGG-PlayPods.
+
+            ### Уже реализовано
+            - полноэкранный графический интерфейс через PS5 VideoOut;
+            - управление DualSense;
+            - Bluetooth-сканирование и список найденных аудиоустройств;
+            - выбор устройства и запуск подключения;
+            - отдельная папка состояния: `/data/fgg-playpods-gui/`;
+            - отдельное имя ELF и metadata для Payload Manager.
+
+            ### Управление
+            - **↑ / ↓** — выбор;
+            - **✕** — открыть / подключить;
+            - **○** — назад;
+            - **□** — повторное сканирование;
+            - **Options** — выход.
+
+            ### В разработке
+            - сохранение нескольких сопряжённых устройств;
+            - повторное подключение;
+            - настройки;
+            - режимы Auto / 1080p / 1440p / 4K;
+            - доработка Bluetooth state machine и аудиостриминга.
+
+            > Это тестовая сборка: GUI и Bluetooth-логика ещё активно дорабатываются.
+
+            ## Установка
+
+            **Payload Manager** — скопируйте `fgg-playpods-gui.elf` и `fgg-playpods-gui.elf.json`
+            по FTP в `/data/pldmgr/payloads/fgg-playpods-gui/`, затем запустите
+            **FGG-PlayPods-GUI**.
+
+            **Прямой запуск** — отправьте `fgg-playpods-gui.elf` на порт 9021 любым
+            совместимым payload sender.
+
+            ## Использование
+
+            Для первого подключения переведите Bluetooth-гарнитуру в режим pairing перед
+            запуском payload. После этого включите гарнитуру и запустите payload.
+
+            Проверить целостность файла можно по `SHA256SUMS`.
+
 
 # Tag a version and the payload is built and published automatically, so
 # fgg-playpods-gui.elf is one click from the releases page and nobody has to
@@ -14,7 +58,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing tag to build and attach the payload to (e.g. 1.0)'
+        description: 'Существующий тег, к которому нужно собрать и прикрепить payload (например, v1.0)'
         required: true
 
 permissions:
@@ -22,7 +66,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and publish payload
+    name: Сборка и публикация payload
     runs-on: ubuntu-latest
 
     steps:
@@ -60,7 +104,7 @@ jobs:
           {
             "name": "FGG-PlayPods-GUI",
             "filename": "fgg-playpods-gui.elf",
-            "description": "Full-screen PS5 GUI for Bluetooth audio device discovery and connection.",
+            "description": "Полноэкранный графический интерфейс PS5 для поиска и подключения Bluetooth-аудиоустройств.",
             "version": "${VERSION}",
             "checksum": "${SHA}",
             "category": "Audio",
@@ -75,7 +119,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'test') || github.ref_name }}
           name: FGG-PlayPods-GUI ${{ github.event.inputs.tag || github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             fgg-playpods-gui.elf
             fgg-playpods-gui.elf.json
