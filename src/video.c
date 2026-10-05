@@ -274,6 +274,8 @@ int video_present(void)
     swizzle(g_linear, dst);
     int rc = sceVideoOutSubmitFlip(g_vout, (int)(g_frame & 1u), 1,
                                    (int64_t)g_frame);
+    if (g_frame == 0u || rc < 0)
+        log_line("video: SubmitFlip frame=%u rc=0x%08x", g_frame, rc);
     if (rc < 0) {
         log_line("video: SubmitFlip failed 0x%08x", rc);
         return 0;
