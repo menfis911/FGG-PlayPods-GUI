@@ -57,7 +57,7 @@ static void gui_draw(void)
 
     video_clear(0x11131affU);
     video_fill_rect(0, 0, info.width, 110, 0x202838ffU);
-    video_draw_text(60, 38, "GUI-FGG-PLAYPODS", 5, 0xf0f4ffffU);
+    video_draw_text(60, 38, "FGG-PLAYPODS-GUI", 5, 0xf0f4ffffU);
     snprintf(line, sizeof(line), "STATUS: %s", status_name(g_status));
     video_draw_text(60, 78, line, 2, 0xb8c8d8ffU);
 
@@ -169,7 +169,6 @@ int gui_init(void)
     g_menu = 0;
     g_device = 0;
     g_action = GUI_ACTION_NONE;
-    g_scan_started = 0;
     g_ready = 1;
 
     log_line("gui: initialized, screen=%s", screen_name(g_screen));
