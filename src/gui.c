@@ -85,10 +85,10 @@ static void gui_draw(void)
                         2, 0xb8c8d8ffU);
     } else {
         static const char *items[] = {
-            "DEVICES", "SAVED DEVICES", "LOGS", "SETTINGS"
+            "DEVICES", "SAVED DEVICES", "SETTINGS"
         };
         video_draw_text(70, 160, "MENU", 4, 0xf0f4ffffU);
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 3; ++i) {
             int y = 230 + i * 80;
             if (i == g_menu)
                 video_fill_rect(60, y - 14, 700, 60, 0x294b72ffU);
@@ -138,7 +138,7 @@ static void gui_handle_button(pad_button button)
         if (g_menu > 0) --g_menu;
         break;
     case PAD_DOWN:
-        if (g_menu < 3) ++g_menu;
+        if (g_menu < 2) ++g_menu;
         break;
     case PAD_CROSS:
         if (g_menu == 0) {
