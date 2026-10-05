@@ -57,6 +57,7 @@ static size_t g_buffer_size;
 static int g_width;
 static int g_height;
 static int g_tiles_w;
+static int g_tiles_h;
 static size_t g_tiled_pixels;
 static uint32_t *g_linear;
 static gui_video_mode g_mode;
