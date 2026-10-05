@@ -41,6 +41,7 @@ extern int scePadInit(void);
 extern int scePadOpen(SceUserServiceUserId user_id, int type, int index, void *param);
 extern int scePadReadState(int handle, void *data);
 extern int scePadClose(int handle);
+extern int scePadGetHandle(SceUserServiceUserId user_id, int type, int index);
 
 extern int sceUserServiceInitialize(void *param);
 extern int sceUserServiceGetInitialUser(SceUserServiceUserId *user_id);
@@ -89,7 +90,11 @@ int pad_init(void)
 
     g_pad = scePadOpen(user_id, 0, 0, NULL);
     if (g_pad < 0) {
-        log_line("pad: PadOpen failed 0x%08x", g_pad);
+        log_line("pad: PadOpen failed 0x%08x; trying existing handle", g_pad);
+        g_pad = scePadGetHandle(user_id, 0, 0);
+    }
+    if (g_pad < 0) {
+        log_line("pad: no DualSense handle available 0x%08x", g_pad);
         g_pad = -1;
         return 0;
     }
