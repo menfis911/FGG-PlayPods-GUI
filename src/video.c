@@ -116,6 +116,7 @@ int video_init(gui_video_mode mode)
     }
 
     g_vout = sceVideoOutOpen(0xff, 0, 0, NULL);
+    log_line("video: VideoOutOpen handle=0x%x", g_vout);
     if (g_vout < 0) {
         log_line("video: VideoOutOpen failed 0x%08x", g_vout);
         g_vout = -1;
@@ -129,6 +130,7 @@ int video_init(gui_video_mode mode)
         return 0;
     }
 
+    log_line("video: output status res=%u", status.res);
     choose_size(mode, (int)status.res, &width, &height, &actual);
     g_width = width;
     g_height = height;
@@ -270,9 +272,10 @@ int video_present(void)
     uint32_t *dst = (uint32_t *)((uint8_t *)g_memory +
                                  (size_t)(g_frame & 1u) * g_buffer_size);
     swizzle(g_linear, dst);
-    if (sceVideoOutSubmitFlip(g_vout, (int)(g_frame & 1u), 1,
-                              (int64_t)g_frame) < 0) {
-        log_line("video: SubmitFlip failed");
+    int rc = sceVideoOutSubmitFlip(g_vout, (int)(g_frame & 1u), 1,
+                                   (int64_t)g_frame);
+    if (rc < 0) {
+        log_line("video: SubmitFlip failed 0x%08x", rc);
         return 0;
     }
     ++g_frame;
