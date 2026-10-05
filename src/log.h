@@ -1,8 +1,8 @@
 /* Logging to a file that survives the payload, and system notifications.
  *
  * A payload has no console, so the log is the only account of what happened.
- * It is opened in append mode and flushed after every line: a run that ends
- * in a crash still leaves everything up to the crash on disk.
+ * Each run starts a fresh log file and the file is flushed after every line:
+ * a run that ends in a crash still leaves everything up to the crash on disk.
  */
 #ifndef FGG_LOG_H
 #define FGG_LOG_H
