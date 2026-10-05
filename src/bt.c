@@ -725,7 +725,7 @@ static int setup_controller(void)
     hci_sync(OP_WRITE_CLASS_OF_DEV, cod, 3);
 
     memset(name, 0, sizeof name);
-    memcpy(name, "FGG-PlayPods", 12);
+    memcpy(name, "FGG-PlayPods-GUI", 16);
     hci_sync(OP_WRITE_LOCAL_NAME, name, (int)sizeof name);
 
     /* Page scan on, inquiry scan off: a paired headset reconnects to its
