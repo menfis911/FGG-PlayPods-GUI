@@ -16,6 +16,8 @@ ELF   := fgg-playpods-gui.elf
 BUILD := build
 
 CFLAGS     := -std=c11 -Wall -Wextra -Werror -O2 -Isrc -Ithird_party/sbc
+LDFLAGS    := -L$(PS5_PAYLOAD_SDK)/target/lib
+LDLIBS     := -lScePad -lSceUserService -lSceSystemService -lSceVideoOut
 # Vendored code is built as upstream wrote it, without this project's
 # warning policy.
 SBC_CFLAGS := -std=gnu11 -O2 -w -Ithird_party/sbc
