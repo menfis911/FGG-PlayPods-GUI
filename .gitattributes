@@ -1,0 +1,17 @@
+# Edited on Windows, built on Linux (WSL and CI). make does not tolerate a
+# Makefile with CRLF line endings, so everything is LF in the repository.
+
+* text=auto eol=lf
+
+*.c       text eol=lf
+*.h       text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+Makefile* text eol=lf
+
+*.elf     binary
+*.png     binary
+
+# Vendored code is not this project's work: keep it out of the language
+# statistics and diffs.
+third_party/** linguist-vendored
