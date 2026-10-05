@@ -27,7 +27,8 @@ class WebPackageTests(unittest.TestCase):
         self.assertRegex(script, r"async\s+function\s+main\s*\(")
         self.assertIn("ApiClient.launchApp", script)
         self.assertIn("/eboot.elf", script)
-        self.assertIn("127.0.0.1:18195", script)
+        self.assertIn('window.location.hostname || "127.0.0.1"', script)
+        self.assertIn('`http://${host}:18195/`', script)
 
     def test_version_is_a_new_release(self):
         version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()

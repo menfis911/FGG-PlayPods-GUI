@@ -5,7 +5,8 @@ async function main() {
     secondaryText: "Bluetooth audio · Web GUI",
     onclick: async () => {
       await ApiClient.launchApp(window.workingDir + "/eboot.elf");
-      const url = "http://127.0.0.1:18195/";
+      const host = window.location.hostname || "127.0.0.1";
+      const url = `http://${host}:18195/`;
       for (let attempt = 0; attempt < 40; attempt += 1) {
         try {
           const response = await fetch(url + "api/status", { cache: "no-store" });
