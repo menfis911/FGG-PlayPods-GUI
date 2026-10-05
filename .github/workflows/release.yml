@@ -51,12 +51,12 @@ jobs:
           file fgg-playpods-gui.elf
 
       # Payload Manager reads this alongside the ELF, so installing from a
-      # release is a copy of two files into /data/pldmgr/payloads/fgg-playpods/.
+      # release is a copy of two files into /data/pldmgr/payloads/fgg-playpods-gui/.
       - name: Generate payload metadata
         run: |
           VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
           SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
-          cat > gui-fgg-playpods-gui.elf.json <<META
+          cat > fgg-playpods-gui.elf.json <<META
           {
             "name": "FGG-PlayPods-GUI",
             "filename": "fgg-playpods-gui.elf",
@@ -68,7 +68,7 @@ jobs:
           }
           META
           sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
-          cat gui-fgg-playpods-gui.elf.json
+          cat fgg-playpods-gui.elf.json
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -78,7 +78,7 @@ jobs:
           generate_release_notes: true
           files: |
             fgg-playpods-gui.elf
-            gui-fgg-playpods-gui.elf.json
+            fgg-playpods-gui.elf.json
             SHA256SUMS
           body: |
             ## FGG-PlayPods-GUI — test build
@@ -111,9 +111,9 @@ jobs:
 
             ## Install
 
-            **Payload Manager** — copy `fgg-playpods-gui.elf` and `gui-fgg-playpods-gui.elf.json`
-            into `/data/pldmgr/payloads/fgg-playpods/` over FTP, then launch
-            **fgg playpods**.
+            **Payload Manager** — copy `fgg-playpods-gui.elf` and `fgg-playpods-gui.elf.json`
+            into `/data/pldmgr/payloads/fgg-playpods-gui/` over FTP, then launch
+            **FGG-PlayPods-GUI**.
 
             **Direct** — send `fgg-playpods-gui.elf` to port 9021 with any payload sender.
 
