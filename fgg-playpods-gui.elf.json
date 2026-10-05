@@ -1,6 +1,6 @@
 {
   "name": "FGG-PlayPods-GUI",
-  "description": "Графический интерфейс FGG-PlayPods-GUI: поиск, выбор и подключение Bluetooth-аудиоустройств.",
-  "version": "0.1.0",
+  "description": "Web GUI для поиска, выбора и подключения Bluetooth-аудиоустройств на PS5.",
+  "version": "0.2.0",
   "category": "Audio"
 }

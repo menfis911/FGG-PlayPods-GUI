@@ -1,5 +1,4 @@
 #include "a2dp.h"
-#include "gui.h"
 #include "bt.h"
 #include "capture.h"
 #include "log.h"
@@ -35,6 +34,11 @@
 
 #define RETRY_MS        500     /* capture restart attempts */
 #define STATUS_MS       5000    /* status line interval */
+
+static volatile int g_stop_requested;
+
+void a2dp_request_stop(void) { g_stop_requested = 1; }
+void a2dp_clear_stop(void)   { g_stop_requested = 0; }
 
 typedef struct {
     int rate;
@@ -225,6 +229,15 @@ static int configure_stream(const sbc_choice *sc)
 
 int a2dp_start(void)
 {
+    memset(&g_sig, 0, sizeof g_sig);
+    g_sig.name = "signaling";
+    g_sig.scid = SIG_CID;
+    g_sig.remote_mtu = 672;
+    memset(&g_media, 0, sizeof g_media);
+    g_media.name = "media";
+    g_media.scid = MEDIA_CID;
+    g_media.remote_mtu = 672;
+    g_fifo_len = 0;
     return bt_open_channel(&g_sig, PSM_AVDTP, on_signal_frame) &&
            find_sbc_sink() && choose_sbc(&g_sc) && configure_stream(&g_sc);
 }
@@ -346,8 +359,8 @@ int a2dp_stream(int capturing)
     t0 = last_status = now_ms();
     if (!capturing) silence_t0 = retry_at = t0;     /* nothing to capture yet */
 
-    /* Runs until the headset goes away: switching it off ends the session. */
-    while (!bt_link_lost() && !g_media.closed) {
+    /* Runs until the headset goes away or the Web API requests disconnect. */
+    while (!bt_link_lost() && !g_media.closed && !g_stop_requested) {
         int n = 0, sent_one = 0;
 
         /* Everything the capture has ready. */
@@ -429,7 +442,6 @@ int a2dp_stream(int capturing)
         }
 
         bt_poll(sent_one ? 1 : 3);
-        gui_tick();
     }
 
 done:

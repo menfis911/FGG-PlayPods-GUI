@@ -1,314 +1,104 @@
-<p align="center">
-  <img src="logo.png" alt="FGG-PlayPods" width="820">
-</p>
+# FGG-PlayPods-GUI
 
-<h1 align="center">FGG-PlayPods-GUI</h1>
+Web-интерфейс для вывода звука PS5 на Bluetooth-наушники через A2DP/SBC.
 
-<p align="center">
-  <b>Форк FGG-PlayPods с графическим интерфейсом для PS5.</b><br>
-  Оригинальный проект: <a href="https://github.com/FGGstore/FGG-PlayPods">FGGstore/FGG-PlayPods</a><br>
-  Цель форка — превратить текущий автоматический payload в полноценное приложение<br>
-  с поиском Bluetooth-устройств, выбором устройства, ручным подключением,<br>
-  сохранёнными устройствами и подробным отображением состояния и логов.
-</p>
+Версия **0.2.0** заменяет собственный полноэкранный VideoOut GUI на локальный Web GUI. Проверенная Bluetooth/audio-реализация сохранена: HCI, discovery, SSP pairing, link key, L2CAP, SDP, AVDTP, SBC и захват системного звука работают в native backend.
 
-> ⚠️ **Статус форка:** сейчас это исходный код оригинального FGG-PlayPods без изменений в логике Bluetooth/audio. GUI и выбор устройства пока находятся в плане разработки. На этом этапе изменена только документация форка.
+## Архитектура
 
-<p align="center">
-  <a href="https://github.com/FGGstore/FGG-PlayPods/actions/workflows/ci.yml"><img src="https://github.com/FGGstore/FGG-PlayPods/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3"></a>
-  <img src="https://img.shields.io/badge/PS5-firmware%2013.60-003791" alt="Tested on firmware 13.60">
-</p>
-
----
-
-## Что это
-
-Этот репозиторий — форк **FGG-PlayPods**.
-
-Оригинальный проект позволяет выводить игровой и системный звук PS5 на обычные Bluetooth-наушники через собственный Bluetooth-контроллер консоли, без USB-донгла. При этом DualSense продолжает работать по беспроводной связи.
-
-В оригинальной версии устройство выбирается автоматически: payload сканирует Bluetooth и подключается к первому найденному подходящему аудиоустройству. Именно эту часть планируется переработать в данном форке.
-
-Планируемая схема:
-
-```
-PS5 audio ──capture──► FGG-PlayPods-GUI ──A2DP/SBC──► выбранное Bluetooth-устройство
-                              │
-                              ├── поиск устройств
-                              ├── выбор устройства
-                              ├── Pair / Connect
-                              ├── сохранённые устройства
-                              └── состояние и логи
+```text
+websrv Homebrew tile
+        │ запускает eboot.elf и открывает http://127.0.0.1:18195/
+        ▼
+HTML / CSS / JavaScript ── HTTP JSON API ── native backend worker
+                                                 │
+                          capture ── SBC ── A2DP ─┴─ Bluetooth headset
 ```
 
-### Возможности оригинального FGG-PlayPods
+- `src/backend.c` — асинхронное состояние и worker Bluetooth/A2DP;
+- `src/http_server.c` — локальный HTTP-сервер и JSON API;
+- `web/` — TV-friendly интерфейс без внешних зависимостей;
+- `src/bt.c`, `src/a2dp.c`, `src/capture.c`, `src/hci.c`, `src/sdp.c` — сохранённая native-реализация;
+- `homebrew.js` — расширение плитки для `ps5-payload-dev/websrv`.
 
-| Возможность | Описание |
-|---|---|
-| **Что передаётся** | игры, меню, уведомления — весь звук консоли |
-| **Устройства** | Bluetooth-наушники, гарнитуры и earbuds с A2DP / SBC |
-| **Аудио** | 48 кГц stereo, SBC высокого качества (bitpool 53) |
-| **DualSense** | остаётся беспроводным и полностью рабочим |
-| **Установка** | ничего не патчится и не устанавливается за пределами собственной папки |
+Старые `gui.c`, `video.c`, `pad.c` и `ps5_tilemap.inc` больше не входят в сборку. Payload не открывает VideoOut и не перехватывает экран.
 
-## Планируемые изменения форка
+## Web API
 
-Главная задача — заменить автоматический выбор первого найденного устройства на управляемый графический интерфейс.
+Backend слушает `0.0.0.0:18195`. Web GUI использует тот же origin.
 
-### 1. Поиск Bluetooth-устройств
+| Метод | Endpoint | Назначение |
+|---|---|---|
+| `GET` | `/api/status` | состояние controller, scan, connection и stream |
+| `GET` | `/api/devices` | найденные audio-устройства: name, MAC, RSSI, state |
+| `POST` | `/api/scan` | поставить discovery в очередь |
+| `POST` | `/api/connect` | подключить устройство; JSON: `{"mac":"AA:BB:CC:DD:EE:FF"}` |
+| `POST` | `/api/disconnect` | остановить stream и отключить устройство |
+| `GET` | `/api/saved` | устройство, для которого сохранён link key |
 
-GUI должен уметь запускать сканирование и отображать найденные устройства:
+Команды возвращают `202 Accepted`, а длительная работа выполняется в Bluetooth worker. HTTP и UI не блокируются во время scan, pairing, connect или streaming. Если backend занят, API возвращает `409 Conflict`.
 
-- имя;
-- MAC-адрес;
-- Bluetooth Class;
-- RSSI, если контроллер его предоставляет;
-- статус устройства;
-- признак сохранённого/сопряжённого устройства.
+## Интеграция с websrv
 
-### 2. Выбор устройства
+Актуальный `websrv` ищет Homebrew в `/data/homebrew`, `/mnt/usb*/homebrew` и `/mnt/ext*/homebrew`. Минимальный поддерживаемый формат — папка приложения с `eboot.elf` и `sce_sys/icon0.png`; опциональный `homebrew.js` настраивает плитку и её действие. Это описано в [официальном README websrv](https://github.com/ps5-payload-dev/websrv#installing-homebrew), а контракт `main()` показан в [официальном demo/homebrew.js](https://github.com/ps5-payload-dev/websrv/blob/master/homebrew/demo/homebrew.js).
 
-Пользователь выбирает конкретное устройство из списка и запускает:
+Ограничения websrv, учтённые в пакете:
 
-**Подключить / Pair**
+- `homebrew.js::main()` должен быстро вернуть объект плитки (лимит websrv — 5 секунд);
+- websrv запускает ELF, но не проксирует произвольный API приложения;
+- порт `8080` уже занят самим websrv;
+- у BigApp/Homebrew нет универсального API запуска через обычный POST.
 
-Payload больше не должен автоматически брать первое найденное устройство.
+Поэтому плитка запускает `eboot.elf`, ждёт доступности backend и переводит браузер на `http://127.0.0.1:18195/`. Backend сам обслуживает встроенные HTML/CSS/JS и API на отдельном порту. Собственный несовместимый манифест не используется.
 
-### 3. Сохранённые устройства
+Структура release-пакета:
 
-После успешного pairing планируется сохранять:
-
-- имя;
-- MAC-адрес;
-- link key;
-- дополнительные данные, необходимые для повторного подключения.
-
-Это позволит выбирать устройство без нового pairing при каждом запуске.
-
-### 4. Повторное подключение
-
-Для ранее сопряжённого устройства:
-
-```
-Запуск → список сохранённых устройств → выбрать → Connect
+```text
+FGG-PlayPods-GUI/
+├── eboot.elf
+├── homebrew.js
+└── sce_sys/
+    └── icon0.png
 ```
 
-Также можно будет предусмотреть автоматическое подключение к последнему выбранному устройству.
+Скопируйте папку `FGG-PlayPods-GUI` в `/data/homebrew/`, запустите `websrv`, затем откройте Homebrew Launcher. Появится отдельная плитка **FGG-PlayPods-GUI**.
 
-### 5. Логи
+## Состояние и совместимость
 
-В GUI планируется отдельный экран с событиями Bluetooth/audio.
+Данные сохраняются отдельно от оригинального FGG-PlayPods:
 
-Например:
-
-```
-[12:49:15] Найдено устройство: JBL ...
-[12:49:15] Подключение...
-[12:49:16] Аутентификация...
-[12:49:16] Ошибка: authentication failed 0x05
+```text
+/data/fgg-playpods-gui/paired.key       # существующий бинарный link key
+/data/fgg-playpods-gui/saved-device.txt # отображаемое имя, без ключа
+/data/fgg-playpods-gui/gui-playpods.log # лог текущего запуска
 ```
 
-При этом существующий файл:
+Формат `paired.key` не изменён. Для устройства, сопряжённого старой версией GUI, `/api/saved` покажет MAC из ключа и временное имя до следующего успешного подключения.
 
-```
-/data/fgg-playpods/playpods.log
-```
+Ограничения Bluetooth остаются прежними:
 
-будет сохранён.
+- одно A2DP-устройство одновременно;
+- Classic Bluetooth Audio / SBC; LE Audio-only не поддерживается;
+- передаётся звук, микрофон не поддерживается;
+- громкость регулируется на гарнитуре;
+- payload использует Bluetooth-контроллер совместно с системным драйвером, не отключая DualSense.
 
-### 6. Статус подключения
-
-GUI должен явно показывать:
-
-- Bluetooth controller;
-- поиск;
-- подключение;
-- pairing;
-- authentication;
-- A2DP;
-- streaming;
-- отключение/ошибку.
-
----
-
-## Оригинальная реализация
-
-Оригинальный FGG-PlayPods решает несколько сложных задач непосредственно внутри payload.
-
-### Захват аудио
-
-Используется внутренний audio capture PS5 таким образом, чтобы получать полный микс, включая игровой звук и системные звуки.
-
-Аудиоформат:
-
-- 48 кГц;
-- stereo;
-- 32-bit float внутри capture;
-- 1024 frames на запись.
-
-### Bluetooth
-
-PS5 имеет Bluetooth, но штатно не предоставляет обычный Bluetooth Audio.
-
-FGG-PlayPods реализует собственный A2DP source внутри payload:
-
-- SSP pairing;
-- L2CAP;
-- SDP;
-- AVDTP;
-- SBC;
-- RTP audio.
-
-### Совместное использование Bluetooth-контроллера
-
-Bluetooth-чип консоли предоставляет два HCI-контроллера.
-
-Системный драйвер использует один из них для DualSense, а FGG-PlayPods работает рядом с системным драйвером через другой интерфейс, не отключая системный Bluetooth-драйвер.
-
-Это принципиально важно для будущего GUI: при добавлении сканирования и выбора устройства нельзя нарушить текущую схему совместного использования контроллера.
-
-### Поток данных
-
-```
-PS5 audio capture
-       ↓
-48 kHz stereo
-       ↓
-SBC encoder
-       ↓
-A2DP / RTP
-       ↓
-Bluetooth controller
-       ↓
-Bluetooth headset
-```
-
-## Структура проекта
-
-| Файл | Назначение |
-|---|---|
-| `src/capture.c` | захват аудио PS5 |
-| `src/hci.c` | USB-транспорт к Bluetooth-контроллеру |
-| `src/bt.c` | pairing, Bluetooth link, L2CAP и flow control |
-| `src/sdp.c` | SDP service record |
-| `src/a2dp.c` | AVDTP, SBC encoding и аудиопоток |
-| `src/log.c` | файловый лог и уведомления PS5 |
-| `src/main.c` | запуск, lock и основная сессия |
-| `third_party/sbc` | SBC codec |
-
-## Установка FGG-PlayPods-GUI
-
-### Payload Manager — основной способ
-
-Форк сохраняет тот же способ установки, что и оригинальный проект:
-
-1. Собрать `fgg-playpods-gui.elf`.
-2. Скопировать **оба файла** через FTP:
-
-```
-fgg-playpods-gui.elf
-fgg-playpods-gui.elf.json
-```
-
-в отдельную папку:
-
-```
-/data/pldmgr/payloads/fgg-playpods-gui/
-```
-
-3. Открыть **Payload Manager**.
-4. Запустить **FGG-PlayPods-GUI**.
-
-Отдельное имя и отдельная папка нужны, чтобы форк мог находиться рядом с оригинальным **FGG-PlayPods** без перезаписи его файлов и состояния. Payload Manager использует каталог `/data/pldmgr/payloads` для хранения payload-файлов. citeturn0search2
-
-### Direct
-
-Для прямого запуска сохраняется стандартный вариант:
-
-```
-fgg-playpods-gui.elf → порт 9021
-```
-
-То есть форк можно запускать и через Payload Manager, и напрямую через payload sender.
-
-> **Важно:** оригинальный FGG-PlayPods и FGG-PlayPods-GUI можно хранить одновременно, но запускать их одновременно не следует — оба используют общий Bluetooth-контроллер PS5.
-
-## Использование оригинальной версии
-
-1. Перевести Bluetooth-гарнитуру в режим pairing.
-2. Запустить payload.
-3. Payload автоматически найдёт подходящее аудиоустройство.
-4. Выполнит pairing и начнёт передавать звук.
-5. При следующих запусках будет использовать сохранённый link key.
-
-Для остановки оригинального payload достаточно выключить гарнитуру.
-
-> В будущей версии GUI автоматический выбор первого найденного устройства будет заменён на выбор пользователем.
-
----
-
-## Ограничения оригинальной версии
-
-- **Одно устройство одновременно.**
-- Для pairing другого устройства необходимо удалить:
-  `/data/fgg-playpods/headset.key`.
-- Передаётся только звук — микрофон не поддерживается.
-- Громкость регулируется на самой гарнитуре.
-- Bluetooth SBC добавляет задержку, поэтому решение не идеально для rhythm games.
-- Только Classic Bluetooth Audio / A2DP. LE Audio-only устройства не поддерживаются.
-
-## Логи
-
-Каждый запуск записывается в:
-
-```
-/data/fgg-playpods/playpods.log
-```
-
-Получить файл можно по FTP.
-
-Для диагностики pairing особенно важны сообщения:
-
-```
-found ...
-connection complete ...
-authentication complete ...
-authentication failed ...
-disconnected ...
-chip vendor event ...
-```
-
-## Сборка
-
-Требуется Linux или WSL и [PS5 Payload SDK](https://github.com/ps5-payload-dev/sdk):
+## Сборка и проверки
 
 ```sh
-sudo apt install clang lld llvm make unzip
 export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
+make check
 make
 ```
 
-Сборка выполняется с:
+`make check` проверяет Web GUI, обязательные API endpoints, контракт `homebrew.js`, metadata и синтаксис JavaScript. `make` встраивает Web assets в ELF, поэтому отдельные файлы `web/` на PS5 не требуются.
 
-```
--Wall -Wextra -Werror
-```
+Для прямого диагностического запуска можно отправить `fgg-playpods-gui.elf` в `elfldr` и открыть `http://<PS5-IP>:18195/` с другого устройства.
 
-Единственный сторонний код — SBC codec из [BlueZ](https://www.bluez.org/), размещённый в `third_party/sbc`.
+## Release
 
-## Лицензия
+Теги `v*` собираются GitHub Actions. Workflow проверяет, что тег совпадает с `VERSION`, собирает ELF и создаёт новый GitHub Release только для нового тега. Существующие releases не перезаписываются.
 
-[GPL-3.0](LICENSE). Vendored SBC codec распространяется по LGPL-2.1-or-later.
+## License
 
-## Credits
-
-Built by **FGG STORE**.
-
-Standing on the work of [ps5-payload-dev](https://github.com/ps5-payload-dev)
-for the SDK and `ftpsrv`, of [BlueZ](https://www.bluez.org/) for the SBC codec,
-and of [idlesauce/ps5-self-pager](https://github.com/idlesauce/ps5-self-pager),
-which made reading the system software possible.
-
-> Not affiliated with Sony Interactive Entertainment or Microsoft. For use with
-> homebrew on consoles you own.
+GPL-3.0. SBC codec в `third_party/sbc` сохраняет собственную лицензию LGPL; подробности в `third_party/sbc/VENDORED.md`.
