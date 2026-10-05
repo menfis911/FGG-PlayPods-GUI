@@ -125,7 +125,7 @@ jobs:
             fgg-playpods-gui.elf
             fgg-playpods-gui.elf.json
             SHA256SUMS
-            FGG-PlayPods-GUI-homebrew-v${{ steps.version.outputs.version }}.zip
+            FGG-PlayPods-GUI-homebrew-v*.zip
           body: |
             ## FGG-PlayPods-GUI — версия ${{ steps.version.outputs.version }}
 
