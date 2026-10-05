@@ -45,7 +45,7 @@ void log_line(const char *fmt, ...)
 
     if (!g_log) return;
 
-    gmtime_r(&now, &tmv);
+    localtime_r(&now, &tmv);
     if (strftime(stamp, sizeof stamp, "%H:%M:%S", &tmv) == 0)
         strcpy(stamp, "00:00:00");
 
