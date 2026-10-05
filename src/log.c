@@ -20,7 +20,11 @@ static FILE *g_log;
 int log_open(const char *dir, const char *path)
 {
     mkdir(dir, 0755);
-    g_log = fopen(path, "ab");
+    g_log = fopen(path, "wb");
+    if (g_log) {
+        log_line("========================================");
+        log_line("log: new payload run");
+    }
     return g_log != NULL;
 }
 
