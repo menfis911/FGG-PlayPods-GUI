@@ -64,6 +64,7 @@
 
   function renderStatus(status) {
     state.status = status;
+    document.body.dataset.backendState = status.status;
     const [label, message] = labels[status.status] || ['Unknown', 'Waiting for backend status…'];
     statusPill.className = `status-pill is-${status.status}`;
     statusPill.querySelector('span').textContent = label;
@@ -150,8 +151,8 @@
     update();
   }
 
-  setupToggle($('#updatesToggle'), 'playpods-updates', true, (enabled) => { state.updates = enabled; });
-  setupToggle($('#motionToggle'), 'playpods-reduce-motion', false, (enabled) => document.body.classList.toggle('reduce-motion', enabled));
+  setupToggle($('#updatesToggle'), 'audiobridge-updates', true, (enabled) => { state.updates = enabled; });
+  setupToggle($('#motionToggle'), 'audiobridge-reduce-motion', false, (enabled) => document.body.classList.toggle('reduce-motion', enabled));
   $('#backendAddress').textContent = `${location.hostname || '127.0.0.1'}:${location.port || '18195'}`;
 
   document.addEventListener('keydown', (event) => {

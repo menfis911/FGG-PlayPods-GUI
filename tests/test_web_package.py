@@ -14,6 +14,16 @@ class WebPackageTests(unittest.TestCase):
             self.assertTrue(path.is_file(), relative)
             self.assertGreater(path.stat().st_size, 100, relative)
 
+    def test_audiobridge_brand_and_local_preview(self):
+        page = (ROOT / "web/index.html").read_text(encoding="utf-8")
+        tile = (ROOT / "homebrew.js").read_text(encoding="utf-8")
+        self.assertIn("AudioBridge — GUI", page)
+        self.assertIn("AudioBridge — GUI", tile)
+        self.assertIn('href="styles.css"', page)
+        self.assertIn('src="app.js"', page)
+        self.assertNotIn('href="/styles.css"', page)
+        self.assertNotIn('src="/app.js"', page)
+
     def test_frontend_uses_documented_api(self):
         script = (ROOT / "web/app.js").read_text(encoding="utf-8")
         for endpoint in (
@@ -37,7 +47,8 @@ class WebPackageTests(unittest.TestCase):
 
     def test_legacy_metadata_is_valid_json(self):
         # Payload Manager metadata is retained as an optional compatibility asset.
-        json.loads((ROOT / "fgg-playpods-gui.elf.json").read_text(encoding="utf-8"))
+        metadata = json.loads((ROOT / "audiobridge-gui.elf.json").read_text(encoding="utf-8"))
+        self.assertEqual(metadata["name"], "AudioBridge-GUI")
 
 
 if __name__ == "__main__":

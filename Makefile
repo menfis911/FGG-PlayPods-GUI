@@ -1,4 +1,4 @@
-# FGG-PlayPods-GUI
+# AudioBridge-GUI
 #
 #   export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
 #   make
@@ -14,13 +14,13 @@ else
     endif
 endif
 
-ELF   := fgg-playpods-gui.elf
+ELF   := audiobridge-gui.elf
 BUILD := build
 VERSION := $(shell cat VERSION)
 WEB_ASSETS := $(BUILD)/generated/web_assets.c
 
 CFLAGS     := -std=c11 -Wall -Wextra -Werror -O2 -Isrc -Ithird_party/sbc \
-              -DFGG_VERSION='"$(VERSION)"'
+              -DAUDIOBRIDGE_VERSION='"$(VERSION)"'
 LDFLAGS    := -L$(PS5_PAYLOAD_SDK)/target/lib
 LDLIBS     := -lpthread
 # Vendored code is built as upstream wrote it, without this project's
