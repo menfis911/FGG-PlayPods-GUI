@@ -15,6 +15,8 @@ int  a2dp_start(void);
  * `capturing` says whether capture_open() found audio to capture; if not,
  * silence is sent until it does. Returns 1 if any audio was sent. */
 int  a2dp_stream(int capturing);
+void a2dp_request_stop(void);
+void a2dp_clear_stop(void);
 
 /* Closes the stream and its channels, if the headset is still there. */
 void a2dp_stop(void);

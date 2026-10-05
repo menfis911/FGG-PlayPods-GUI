@@ -35,9 +35,14 @@ typedef struct {
 
 int bt_scan_start(void);
 int bt_scan_poll(void);
+void bt_scan_cancel(void);
 int bt_device_count(void);
 const bt_device *bt_device_get(int index);
 int bt_connect_device(int index, const char *key_path);
+int bt_connect_addr(const unsigned char addr[6], const char *name,
+                    const char *key_path);
+void bt_request_stop(void);
+void bt_clear_stop(void);
 
 /* Opens the controller and prepares it. Returns 0 on failure. */
 int  bt_start(void);

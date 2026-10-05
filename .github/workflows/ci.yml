@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, 'codex/**' ]
   pull_request:
   workflow_dispatch:
 
@@ -20,7 +20,10 @@ jobs:
           # list: without llvm-config the wrapper fails with a confusing
           # "/llvm-clang: No such file or directory".
           sudo apt-get install -y --no-install-recommends \
-            clang lld llvm make unzip curl
+            clang lld llvm make unzip curl python3 nodejs
+
+      - name: Web GUI checks
+        run: make check
 
       - name: Install PS5 Payload SDK
         run: |
@@ -35,3 +38,12 @@ jobs:
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
           make
           file fgg-playpods-gui.elf
+
+      - name: Verify websrv package layout
+        run: |
+          mkdir -p package/FGG-PlayPods-GUI/sce_sys
+          cp fgg-playpods-gui.elf package/FGG-PlayPods-GUI/eboot.elf
+          cp homebrew.js package/FGG-PlayPods-GUI/homebrew.js
+          cp sce_sys/icon0.png package/FGG-PlayPods-GUI/sce_sys/icon0.png
+          test -s package/FGG-PlayPods-GUI/eboot.elf
+          test -s package/FGG-PlayPods-GUI/homebrew.js

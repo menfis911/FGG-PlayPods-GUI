@@ -1,16 +1,13 @@
-name: Релиз
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v[0-9]*'
-      - '[0-9]*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Существующий тег для сборки и публикации, например v1.0'
+        description: 'New tag to publish, for example v0.2.0'
         required: true
 
 permissions:
@@ -18,136 +15,88 @@ permissions:
 
 jobs:
   build:
-    name: Сборка и публикация payload
+    name: Build and publish Web GUI package
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
     steps:
-      - name: Получение исходного кода
+      - name: Check out requested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.repository.default_branch || github.ref }}
 
-      - name: Установка инструментов
+      - name: Validate new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$RELEASE_TAG" = "v$(cat VERSION)"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+      - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang lld llvm make unzip curl zip
+          sudo apt-get install -y --no-install-recommends \
+            clang lld llvm make unzip curl zip python3 nodejs
 
-      - name: Установка PS5 Payload SDK
+      - name: Run Web GUI checks
+        run: make check
+
+      - name: Install PS5 Payload SDK
         run: |
-          curl -sSL -o sdk.zip https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
+          curl -sSL -o sdk.zip \
+            https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
           sudo unzip -q -o -d /opt sdk.zip
           sudo chmod -R +x /opt/ps5-payload-sdk/bin
 
-      - name: Сборка
+      - name: Build native backend
         run: |
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
           make
           file fgg-playpods-gui.elf
 
-      - name: Подготовка Homebrew Launcher пакета
+      - name: Build websrv Homebrew package
         run: |
-          VERSION="$(cat VERSION)"
-          rm -rf FGG-PlayPods-GUI
-          mkdir -p FGG-PlayPods-GUI/sce_sys
-          cp fgg-playpods-gui.elf FGG-PlayPods-GUI/eboot.elf
-          cp sce_sys/icon0.png FGG-PlayPods-GUI/sce_sys/icon0.png
-          cat > FGG-PlayPods-GUI/sce_sys/param.json <<'JSON'
-          {
-            "ageLevel": {"default": 0},
-            "applicationCategoryType": 0,
-            "applicationDrmType": "free",
-            "attribute": 0,
-            "attribute2": 0,
-            "attribute3": 0,
-            "conceptId": "00001",
-            "contentBadgeType": 1,
-            "contentId": "PFGG00001_00-FGGPLAYPODSGUI01",
-            "contentVersion": "01.000.000",
-            "downloadDataSize": 0,
-            "gameIntent": {"permittedIntents": [{"intentType": "launchActivity"}]},
-            "localizedParameters": {
-              "defaultLanguage": "ru-RU",
-              "ru-RU": {"titleName": "FGG-PlayPods-GUI"}
-            },
-            "masterVersion": "01.00",
-            "pubtools": {
-              "creationDate": "2026-10-05 00:00:00",
-              "loudnessSnd0": "-28.00",
-              "toolVersion": "2.00"
-            },
-            "requiredSystemSoftwareVersion": "0x0000000000000000",
-            "sdkVersion": "0x0000000000000000",
-            "titleId": "PFGG00001",
-            "versionFileUri": ""
-          }
-          JSON
-          zip -qr "FGG-PlayPods-GUI-homebrew-v${VERSION}.zip" FGG-PlayPods-GUI
-          unzip -t "FGG-PlayPods-GUI-homebrew-v${VERSION}.zip"
+          PACKAGE="FGG-PlayPods-GUI-websrv-${RELEASE_TAG}.zip"
+          mkdir -p package/FGG-PlayPods-GUI/sce_sys
+          cp fgg-playpods-gui.elf package/FGG-PlayPods-GUI/eboot.elf
+          cp homebrew.js package/FGG-PlayPods-GUI/homebrew.js
+          cp sce_sys/icon0.png package/FGG-PlayPods-GUI/sce_sys/icon0.png
+          (cd package && zip -qr "../$PACKAGE" FGG-PlayPods-GUI)
+          unzip -t "$PACKAGE"
 
-      - name: Создание metadata
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ]; then
-            VERSION="v$(cat VERSION)"
-          else
-            VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
-          fi
           SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
           cat > fgg-playpods-gui.elf.json <<META
           {
             "name": "FGG-PlayPods-GUI",
             "filename": "fgg-playpods-gui.elf",
-            "description": "Полноэкранный графический интерфейс PS5 для поиска и подключения Bluetooth-аудиоустройств.",
-            "version": "${VERSION}",
-            "checksum": "${SHA}",
+            "description": "Web GUI and native Bluetooth/A2DP backend for PS5.",
+            "version": "$RELEASE_TAG",
+            "checksum": "$SHA",
             "category": "Audio",
-            "source": "https://github.com/menfis911/FGG-PlayPods-GUI"
+            "source": "https://github.com/$GITHUB_REPOSITORY"
           }
           META
-          sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
-          sha256sum "FGG-PlayPods-GUI-homebrew-v$(cat VERSION).zip" | tee -a SHA256SUMS
+          sha256sum fgg-playpods-gui.elf "$PACKAGE" > SHA256SUMS
 
-      - name: Определение версии
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ]; then
-            echo "version=v$(cat VERSION)" >> "$GITHUB_OUTPUT"
-          else
-            echo "version=${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Публикация релиза
+      - name: Publish immutable release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: FGG-PlayPods-GUI — ${{ steps.version.outputs.version }}
-          generate_release_notes: false
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: FGG-PlayPods-GUI — ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
           files: |
             fgg-playpods-gui.elf
             fgg-playpods-gui.elf.json
             SHA256SUMS
-            FGG-PlayPods-GUI-homebrew-v*.zip
+            FGG-PlayPods-GUI-websrv-*.zip
           body: |
-            ## FGG-PlayPods-GUI — версия ${{ steps.version.outputs.version }}
+            ## Web GUI release
 
-            ### Главное
-            - добавлен пакет для Homebrew Launcher;
-            - пакет содержит `eboot.elf`, `sce_sys/param.json` и временную синюю `icon0.png`;
-            - исходный payload `fgg-playpods-gui.elf` сохранён;
-            - лог фиксируется по московскому времени (UTC+3);
-            - версия payload синхронизирована с `VERSION`.
-
-            ### Homebrew-пакет
-            ```
-            FGG-PlayPods-GUI/
-            ├── eboot.elf
-            └── sce_sys/
-                ├── icon0.png
-                └── param.json
-            ```
-
-            ### Важно
-            Тестируем GUI через Homebrew Launcher. Прямой запуск через Payload Manager пока считаем диагностическим режимом.
-
-            > Иконка временная — простой синий фон. Нормальную иконку добавим позже.
-
-            `SHA256SUMS` содержит контрольные суммы ELF и Homebrew ZIP.
+            Install `FGG-PlayPods-GUI` from the WebSrv ZIP into `/data/homebrew/`.
+            The package contains the native Bluetooth/A2DP backend, the websrv tile
+            extension, and the icon. The Web GUI is embedded into `eboot.elf`.

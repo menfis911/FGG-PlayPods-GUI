@@ -3,6 +3,8 @@ build/
 *.elf
 *.o
 *.a
+__pycache__/
+*.pyc
 
 # Editor and OS noise
 .vscode/

@@ -1,5 +1,4 @@
 #include "bt.h"
-#include "gui.h"
 #include "hci.h"
 #include "log.h"
 #include "sdp.h"
@@ -94,6 +93,7 @@ static long g_system_replies;
 
 static void (*g_tick)(void);
 static long g_last_tick;
+static volatile int g_stop_requested;
 
 /* ---- helpers ----------------------------------------------------------- */
 
@@ -240,6 +240,8 @@ long bt_reports_missing(void)      { return g_sent - g_reported; }
 long bt_completions_assumed(void)  { return g_assumed; }
 int  bt_link_lost(void)            { return g_disconnected; }
 void bt_set_tick(void (*fn)(void)) { g_tick = fn; }
+void bt_request_stop(void)         { g_stop_requested = 1; }
+void bt_clear_stop(void)           { g_stop_requested = 0; }
 
 int bt_max_frame(void)
 {
@@ -322,6 +324,7 @@ static void on_inquiry_record(const unsigned char *r, const unsigned char *eir,
         if (idx < g_device_count) {
             bt_device *d = &g_devices[idx];
             d->cod = cod;
+            d->rssi = (int8_t)r[13];
             if (name[0]) snprintf(d->name, sizeof(d->name), "%s", name);
         }
         g_found = g_device_count > 0;
@@ -660,8 +663,6 @@ void bt_poll(int timeout_ms)
     while ((n = hci_next_event(buf, (int)sizeof buf)) > 0) on_event(buf, n);
     while ((n = hci_next_acl(buf, (int)sizeof buf)) > 0) on_acl(buf, n);
 
-    gui_tick();
-
     if (g_tick && now_ms() - g_last_tick >= 1000) {
         g_last_tick = now_ms();
         g_tick();
@@ -672,13 +673,13 @@ int bt_wait(volatile int *flag, int timeout_ms)
 {
     long deadline = now_ms() + timeout_ms;
 
-    while (!*flag) {
+    while (!*flag && !g_stop_requested) {
         long left = deadline - now_ms();
         if (left <= 0) return 0;
         bt_poll(left > 100 ? 100 : (int)left);
         if (g_disconnected && flag != &g_disconnected) return 0;
     }
-    return 1;
+    return *flag != 0;
 }
 
 /* Sends a command and waits for its Command Complete. On the shared
@@ -738,6 +739,14 @@ int bt_start(void)
 {
     int attempt;
 
+    bt_clear_stop();
+    g_conn_done = g_conn_status = g_handle = 0;
+    g_auth_done = g_auth_status = 0;
+    g_enc_status = g_enc_on = 0;
+    g_disconnected = 0;
+    g_nchans = 0;
+    g_l2len = g_l2need = 0;
+    g_if_head = g_if_count = 0;
     /* Right after a previous session the controller can take a moment to
      * answer; closing and trying again a little later works. */
     for (attempt = 1; attempt <= 4; attempt++) {
@@ -827,6 +836,14 @@ int bt_scan_poll(void)
     return g_inq_done;
 }
 
+void bt_scan_cancel(void)
+{
+    if (!g_inq_done) {
+        hci_cmd(OP_INQUIRY_CANCEL, NULL, 0);
+        bt_poll(100);
+    }
+}
+
 int bt_connect_device(int index, const char *key_path)
 {
     const bt_device *d = bt_device_get(index);
@@ -838,6 +855,21 @@ int bt_connect_device(int index, const char *key_path)
     g_target_clock = 0;
     g_target_selected = 1;
     log_line("selected device[%d]: %s '%s'", index, addr_str(d->addr), d->name);
+    return bt_connect(key_path);
+}
+
+int bt_connect_addr(const unsigned char addr[6], const char *name,
+                    const char *key_path)
+{
+    if (!addr || !key_path) return 0;
+    g_key_path = key_path;
+    key_load();
+    memcpy(g_target, addr, sizeof g_target);
+    g_target_psrm = 0x01;
+    g_target_clock = 0;
+    g_target_selected = 1;
+    log_line("selected device: %s '%s'", addr_str(addr),
+             name && name[0] ? name : "(unknown)");
     return bt_connect(key_path);
 }
 
@@ -866,7 +898,8 @@ int bt_connect(const char *key_path)
 
     /* A paired headset that is switched on reconnects by itself; give it a
      * moment before paging it. */
-    if (g_key.valid && bt_wait(&g_conn_done, 3000) && g_conn_status == 0) {
+    if (g_key.valid && memcmp(g_key.addr, g_target, 6) == 0 &&
+        bt_wait(&g_conn_done, 3000) && g_conn_status == 0) {
         log_line("headset connected by itself");
     } else {
         g_conn_done = 0;
