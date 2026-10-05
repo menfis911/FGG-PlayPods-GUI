@@ -45,7 +45,10 @@ void log_line(const char *fmt, ...)
 
     if (!g_log) return;
 
-    localtime_r(&now, &tmv);
+    /* Keep payload logs fixed at Moscow time (UTC+3). */
+    time_t msk_now = now + 3 * 60 * 60;
+    gmtime_r(&msk_now, &tmv);
+
     if (strftime(stamp, sizeof stamp, "%H:%M:%S", &tmv) == 0)
         strcpy(stamp, "00:00:00");
 
@@ -55,8 +58,6 @@ void log_line(const char *fmt, ...)
     fprintf(g_log, "\n");
     va_end(ap);
 
-    /* Flushed per line on purpose: an unflushed buffer is lost if the payload
-     * faults, and a fault is exactly when the log matters most. */
     fflush(g_log);
 }
 

@@ -30,7 +30,7 @@ jobs:
       - name: Установка инструментов
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang lld llvm make unzip curl
+          sudo apt-get install -y --no-install-recommends clang lld llvm make unzip curl zip
 
       - name: Установка PS5 Payload SDK
         run: |
@@ -43,6 +43,46 @@ jobs:
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
           make
           file fgg-playpods-gui.elf
+
+      - name: Подготовка Homebrew Launcher пакета
+        run: |
+          VERSION="$(cat VERSION)"
+          rm -rf FGG-PlayPods-GUI
+          mkdir -p FGG-PlayPods-GUI/sce_sys
+          cp fgg-playpods-gui.elf FGG-PlayPods-GUI/eboot.elf
+          cp sce_sys/icon0.png FGG-PlayPods-GUI/sce_sys/icon0.png
+          cat > FGG-PlayPods-GUI/sce_sys/param.json <<'JSON'
+          {
+            "ageLevel": {"default": 0},
+            "applicationCategoryType": 0,
+            "applicationDrmType": "free",
+            "attribute": 0,
+            "attribute2": 0,
+            "attribute3": 0,
+            "conceptId": "00001",
+            "contentBadgeType": 1,
+            "contentId": "PFGG00001_00-FGGPLAYPODSGUI01",
+            "contentVersion": "01.000.000",
+            "downloadDataSize": 0,
+            "gameIntent": {"permittedIntents": [{"intentType": "launchActivity"}]},
+            "localizedParameters": {
+              "defaultLanguage": "ru-RU",
+              "ru-RU": {"titleName": "FGG-PlayPods-GUI"}
+            },
+            "masterVersion": "01.00",
+            "pubtools": {
+              "creationDate": "2026-10-05 00:00:00",
+              "loudnessSnd0": "-28.00",
+              "toolVersion": "2.00"
+            },
+            "requiredSystemSoftwareVersion": "0x0000000000000000",
+            "sdkVersion": "0x0000000000000000",
+            "titleId": "PFGG00001",
+            "versionFileUri": ""
+          }
+          JSON
+          zip -qr "FGG-PlayPods-GUI-homebrew-v${VERSION}.zip" FGG-PlayPods-GUI
+          unzip -t "FGG-PlayPods-GUI-homebrew-v${VERSION}.zip"
 
       - name: Создание metadata
         run: |
@@ -64,7 +104,7 @@ jobs:
           }
           META
           sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
-          cat fgg-playpods-gui.elf.json
+          sha256sum "FGG-PlayPods-GUI-homebrew-v$(cat VERSION).zip" | tee -a SHA256SUMS
 
       - name: Определение версии
         id: version
@@ -85,56 +125,29 @@ jobs:
             fgg-playpods-gui.elf
             fgg-playpods-gui.elf.json
             SHA256SUMS
+            FGG-PlayPods-GUI-homebrew-v${{ steps.version.outputs.version }}.zip
           body: |
             ## FGG-PlayPods-GUI — версия ${{ steps.version.outputs.version }}
 
-            Обновлённая тестовая версия GUI-форка FGG-PlayPods.
+            ### Главное
+            - добавлен пакет для Homebrew Launcher;
+            - пакет содержит `eboot.elf`, `sce_sys/param.json` и временную синюю `icon0.png`;
+            - исходный payload `fgg-playpods-gui.elf` сохранён;
+            - лог фиксируется по московскому времени (UTC+3);
+            - версия payload синхронизирована с `VERSION`.
 
-            ### Изменения в этой версии
-            - исправлена критическая ошибка запуска GUI через Payload Manager;
-            - ошибка `sceSystemServiceHideSplashScreen` теперь не останавливает инициализацию VideoOut;
-            - исправлен расчёт высоты tiled framebuffer для корректного вывода изображения;
-            - убран отдельный пункт «Логи» из GUI;
-            - обновлены имя проекта, ELF и metadata: `FGG-PlayPods-GUI`, `fgg-playpods-gui.elf`;
-            - обновлены русские описание и metadata для Payload Manager;
-            - сохранён SHA-256 для проверки целостности payload.
+            ### Homebrew-пакет
+            ```
+            FGG-PlayPods-GUI/
+            ├── eboot.elf
+            └── sce_sys/
+                ├── icon0.png
+                └── param.json
+            ```
 
-            ### Уже реализовано
-            - полноэкранный графический интерфейс через PS5 VideoOut;
-            - управление DualSense;
-            - Bluetooth-сканирование и список найденных аудиоустройств;
-            - выбор устройства и запуск подключения;
-            - отдельная папка состояния: `/data/fgg-playpods-gui/`;
-            - отдельное имя ELF и metadata для Payload Manager.
+            ### Важно
+            Тестируем GUI через Homebrew Launcher. Прямой запуск через Payload Manager пока считаем диагностическим режимом.
 
-            ### Управление
-            - **↑ / ↓** — выбор;
-            - **✕** — открыть / подключить;
-            - **○** — назад;
-            - **□** — повторное сканирование;
-            - **Options** — выход.
+            > Иконка временная — простой синий фон. Нормальную иконку добавим позже.
 
-            ### В разработке
-            - сохранение нескольких сопряжённых устройств;
-            - повторное подключение;
-            - настройки;
-            - режимы Auto / 1080p / 1440p / 4K;
-            - доработка Bluetooth state machine и аудиостриминга.
-
-            > Это тестовая сборка: GUI и Bluetooth-логика ещё активно дорабатываются.
-
-            ## Установка
-
-            **Payload Manager** — скопируйте `fgg-playpods-gui.elf` и `fgg-playpods-gui.elf.json`
-            по FTP в `/data/pldmgr/payloads/fgg-playpods-gui/`, затем запустите
-            **FGG-PlayPods-GUI**.
-
-            **Прямой запуск** — отправьте `fgg-playpods-gui.elf` на порт 9021 совместимым
-            payload sender.
-
-            ## Проверка
-
-            После запуска сначала проверяем, появляется ли GUI на экране. Bluetooth и аудиостриминг
-            тестируем следующим этапом.
-
-            Проверить целостность файла можно по `SHA256SUMS`.
+            `SHA256SUMS` содержит контрольные суммы ELF и Homebrew ZIP.
