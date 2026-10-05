@@ -70,7 +70,7 @@ int pad_init(void)
     if (g_pad >= 0) return 1;
 
     rc = sceUserServiceInitialize(NULL);
-    if (rc < 0 && rc != 0x80960003) {
+    if (rc < 0 && rc != (int)0x80960003U) {
         log_line("pad: UserServiceInitialize failed 0x%08x", rc);
         return 0;
     }
