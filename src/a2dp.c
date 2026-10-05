@@ -1,4 +1,5 @@
 #include "a2dp.h"
+#include "gui.h"
 #include "bt.h"
 #include "capture.h"
 #include "log.h"
