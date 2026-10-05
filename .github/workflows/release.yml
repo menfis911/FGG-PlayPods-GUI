@@ -1,4 +1,78 @@
-name: Релиз          body: |
+name: Релиз
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v[0-9]*'
+      - '[0-9]*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Существующий тег для сборки и публикации, например v1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Сборка и публикация payload
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Получение исходного кода
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Установка инструментов
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang lld llvm make unzip curl
+
+      - name: Установка PS5 Payload SDK
+        run: |
+          curl -sSL -o sdk.zip https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
+          sudo unzip -q -o -d /opt sdk.zip
+          sudo chmod -R +x /opt/ps5-payload-sdk/bin
+
+      - name: Сборка
+        run: |
+          export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
+          make
+          file fgg-playpods-gui.elf
+
+      - name: Создание metadata
+        run: |
+          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
+          cat > fgg-playpods-gui.elf.json <<META
+          {
+            "name": "FGG-PlayPods-GUI",
+            "filename": "fgg-playpods-gui.elf",
+            "description": "Полноэкранный графический интерфейс PS5 для поиска и подключения Bluetooth-аудиоустройств.",
+            "version": "${VERSION}",
+            "checksum": "${SHA}",
+            "category": "Audio",
+            "source": "https://github.com/menfis911/FGG-PlayPods-GUI"
+          }
+          META
+          sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
+          cat fgg-playpods-gui.elf.json
+
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'test') || github.ref_name }}
+          name: FGG-PlayPods-GUI — ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: false
+          files: |
+            fgg-playpods-gui.elf
+            fgg-playpods-gui.elf.json
+            SHA256SUMS
+          body: |
             ## FGG-PlayPods-GUI — тестовая сборка
 
             Экспериментальная полноэкранная GUI-версия FGG-PlayPods.
@@ -33,8 +107,8 @@ name: Релиз          body: |
             по FTP в `/data/pldmgr/payloads/fgg-playpods-gui/`, затем запустите
             **FGG-PlayPods-GUI**.
 
-            **Прямой запуск** — отправьте `fgg-playpods-gui.elf` на порт 9021 любым
-            совместимым payload sender.
+            **Прямой запуск** — отправьте `fgg-playpods-gui.elf` на порт 9021 совместимым
+            payload sender.
 
             ## Использование
 
@@ -42,129 +116,3 @@ name: Релиз          body: |
             запуском payload. После этого включите гарнитуру и запустите payload.
 
             Проверить целостность файла можно по `SHA256SUMS`.
-
-
-# Tag a version and the payload is built and published automatically, so
-# fgg-playpods-gui.elf is one click from the releases page and nobody has to
-# install a cross-compiler to get it.
-on:
-  push:
-    branches:
-      - main
-    # Both spellings: 'v1.0' and a bare '1.0'.
-    tags:
-      - 'v[0-9]*'
-      - '[0-9]*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Существующий тег, к которому нужно собрать и прикрепить payload (например, v1.0)'
-        required: true
-
-permissions:
-  contents: write
-
-jobs:
-  build:
-    name: Сборка и публикация payload
-    runs-on: ubuntu-latest
-
-    steps:
-      # A manual run must check out the tag, not whatever is on main.
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - name: Install toolchain
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            clang lld llvm make unzip curl
-
-      - name: Install PS5 Payload SDK
-        run: |
-          curl -sSL -o sdk.zip \
-            https://github.com/ps5-payload-dev/sdk/releases/latest/download/ps5-payload-sdk.zip
-          sudo unzip -q -o -d /opt sdk.zip
-          sudo chmod -R +x /opt/ps5-payload-sdk/bin
-
-      - name: Build
-        run: |
-          export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-          make
-          file fgg-playpods-gui.elf
-
-      # Payload Manager reads this alongside the ELF, so installing from a
-      # release is a copy of two files into /data/pldmgr/payloads/fgg-playpods-gui/.
-      - name: Generate payload metadata
-        run: |
-          VERSION="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
-          SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
-          cat > fgg-playpods-gui.elf.json <<META
-          {
-            "name": "FGG-PlayPods-GUI",
-            "filename": "fgg-playpods-gui.elf",
-            "description": "Полноэкранный графический интерфейс PS5 для поиска и подключения Bluetooth-аудиоустройств.",
-            "version": "${VERSION}",
-            "checksum": "${SHA}",
-            "category": "Audio",
-            "source": "https://github.com/menfis911/FGG-PlayPods-GUI"
-          }
-          META
-          sha256sum fgg-playpods-gui.elf | tee SHA256SUMS
-          cat fgg-playpods-gui.elf.json
-
-      - name: Publish release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.tag || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'test') || github.ref_name }}
-          name: FGG-PlayPods-GUI ${{ github.event.inputs.tag || github.ref_name }}
-          generate_release_notes: false
-          files: |
-            fgg-playpods-gui.elf
-            fgg-playpods-gui.elf.json
-            SHA256SUMS
-          body: |
-            ## FGG-PlayPods-GUI — test build
-
-            Экспериментальная полноэкранная GUI-версия FGG-PlayPods.
-
-            ### Уже реализовано
-            - полноэкранный GUI через PS5 VideoOut;
-            - управление DualSense;
-            - Bluetooth-сканирование и список найденных аудиоустройств;
-            - выбор устройства и запуск подключения;
-            - отдельный runtime state/log directory: `/data/fgg-playpods-gui/`;
-            - отдельное имя ELF и metadata для Payload Manager.
-
-            ### Управление
-            - **↑ / ↓** — выбор;
-            - **✕** — открыть / подключить;
-            - **○** — назад;
-            - **□** — повторное сканирование;
-            - **Options** — выход.
-
-            ### В разработке
-            - сохранение нескольких сопряжённых устройств;
-            - повторное подключение;
-            - полноценные логи и настройки;
-            - Auto / 1080p / 1440p / 4K;
-            - доработка Bluetooth state machine и аудиостриминга.
-
-            > Это тестовая сборка: GUI и Bluetooth-логика ещё активно дорабатываются.
-
-            ## Install
-
-            **Payload Manager** — copy `fgg-playpods-gui.elf` and `fgg-playpods-gui.elf.json`
-            into `/data/pldmgr/payloads/fgg-playpods-gui/` over FTP, then launch
-            **FGG-PlayPods-GUI**.
-
-            **Direct** — send `fgg-playpods-gui.elf` to port 9021 with any payload sender.
-
-            ## Use
-
-            The first time, put the headset in pairing mode before launching.
-            After that, switch the headset on and launch: it reconnects by itself.
-            Switch the headset off to stop.
-
-            Verify your download against `SHA256SUMS`.
