@@ -111,8 +111,8 @@ int video_init(gui_video_mode mode)
 
     rc = sceSystemServiceHideSplashScreen();
     if (rc < 0) {
-        log_line("video: HideSplashScreen failed 0x%08x", rc);
-        return 0;
+        /* Payload Manager launches may not expose the splash service. */
+        log_line("video: HideSplashScreen unavailable 0x%08x; continuing", rc);
     }
 
     g_vout = sceVideoOutOpen(0xff, 0, 0, NULL);
@@ -134,6 +134,7 @@ int video_init(gui_video_mode mode)
     g_height = height;
     g_mode = actual;
     g_tiles_w = (width + TILE_W - 1) / TILE_W;
+    g_tiles_h = (height + TILE_H - 1) / TILE_H;
     g_tiled_pixels = (size_t)g_tiles_w * (size_t)g_tiles_h * TILE_SIZE;
     g_buffer_size = g_tiled_pixels * VIDEO_BYTES_PER_PIXEL;
     g_memory_size = g_buffer_size * VIDEO_BUFFERS;
