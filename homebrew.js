@@ -2,7 +2,7 @@
 async function main() {
   return {
     mainText: "AudioBridge — GUI",
-    secondaryText: "Bluetooth audio · Web GUI",
+    secondaryText: "PS5 Bluetooth audio · A2DP",
     onclick: async () => {
       await ApiClient.launchApp(window.workingDir + "/eboot.elf");
       const host = window.location.hostname || "127.0.0.1";

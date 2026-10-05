@@ -73,7 +73,7 @@ jobs:
           {
             "name": "AudioBridge-GUI",
             "filename": "audiobridge-gui.elf",
-            "description": "Web GUI and native Bluetooth/A2DP backend for PS5.",
+            "description": "PS5 Bluetooth A2DP Web GUI based on FGG-PlayPods by FathiGhanem.",
             "version": "$RELEASE_TAG",
             "checksum": "$SHA",
             "category": "Audio",

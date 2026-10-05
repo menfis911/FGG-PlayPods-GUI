@@ -17,8 +17,11 @@ class WebPackageTests(unittest.TestCase):
     def test_audiobridge_brand_and_local_preview(self):
         page = (ROOT / "web/index.html").read_text(encoding="utf-8")
         tile = (ROOT / "homebrew.js").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("AudioBridge — GUI", page)
         self.assertIn("AudioBridge — GUI", tile)
+        self.assertIn("FathiGhanem", readme)
+        self.assertIn("FGGstore/FGG-PlayPods", readme)
         self.assertIn('href="styles.css"', page)
         self.assertIn('src="app.js"', page)
         self.assertNotIn('href="/styles.css"', page)

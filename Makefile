@@ -9,7 +9,7 @@ PS5_PORT ?= 9021
 ifdef PS5_PAYLOAD_SDK
     include $(PS5_PAYLOAD_SDK)/toolchain/prospero.mk
 else
-    ifeq ($(filter check test clean,$(MAKECMDGOALS)),)
+    ifeq ($(filter check test preview clean,$(MAKECMDGOALS)),)
         $(error PS5_PAYLOAD_SDK is undefined)
     endif
 endif
@@ -32,7 +32,7 @@ SRCS     := src/main.c src/backend.c src/http_server.c src/capture.c src/hci.c \
 SBC_SRCS := third_party/sbc/sbc.c third_party/sbc/sbc_primitives.c
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS) $(SBC_SRCS))
 
-.PHONY: all clean test check deploy
+.PHONY: all clean test check preview deploy
 
 all: $(ELF)
 
@@ -60,6 +60,9 @@ check:
 	node --check homebrew.js
 
 test: check
+
+preview:
+	python3 -m http.server 18196 --directory web
 
 deploy: $(ELF)
 	$(PS5_DEPLOY) -h $(PS5_HOST) -p $(PS5_PORT) $^

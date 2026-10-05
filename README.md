@@ -1,12 +1,27 @@
-# AudioBridge — GUI
+<p align="center">
+  <img src="sce_sys/icon0.png" alt="AudioBridge — GUI" width="180">
+</p>
 
-**AudioBridge — GUI** — самостоятельный PS5 homebrew-проект для передачи системного и игрового звука на Bluetooth-наушники и колонки через A2DP/SBC. Управление выполняется из современного Web GUI: поиск устройств, pairing, подключение, повторное подключение и контроль состояния потока.
+<h1 align="center">AudioBridge — GUI</h1>
 
-Версия **0.2.0** заменяет собственный полноэкранный VideoOut-интерфейс на Web GUI и разделяет приложение на native backend, неблокирующий HTTP API и интерфейс для телевизора. Проверенная Bluetooth/audio-реализация сохранена: HCI, discovery, SSP pairing, link key, L2CAP, SDP, AVDTP, SBC и захват системного звука остаются в native-части.
+<p align="center">
+  <strong>Web GUI для передачи всего звука PS5 на обычные Bluetooth-наушники.</strong><br>
+  Без USB-донгла, через Bluetooth-контроллер консоли, с сохранением беспроводного DualSense.
+</p>
+
+| | |
+|---|---|
+| **Основа** | [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods) от [FathiGhanem](https://github.com/FathiGhanem) |
+| **Идея AudioBridge** | заменить автоматическое подключение к первому устройству на управляемое приложение с Web GUI |
+| **Как работает** | native backend захватывает звук PS5 и передаёт его через SBC/A2DP; Web GUI управляет backend через JSON API |
+| **Что добавлено** | scan, список устройств, RSSI, выбор по MAC, pairing, connect/disconnect, saved devices, статус streaming и websrv-плитка |
+| **Версия** | `0.2.0` |
+
+AudioBridge — самостоятельное продолжение и производная работа на базе FGG-PlayPods. Проверенная Bluetooth/audio-реализация сохранена, а приложение получило новую архитектуру: асинхронный backend, неблокирующий HTTP API и интерфейс для телевизора вместо собственного полноэкранного VideoOut GUI.
 
 ## Происхождение проекта
 
-AudioBridge вырос из [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods). Исходный проект реализовал наиболее сложную часть: доступ к Bluetooth-контроллеру PS5, A2DP source, SBC-кодирование и захват системного звука.
+AudioBridge вырос из [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods), созданного [FathiGhanem](https://github.com/FathiGhanem) и опубликованного FGG Store. Автор исходного проекта реализовал наиболее сложную часть: исследовал аудиозахват PS5 и работу её Bluetooth-контроллера, написал A2DP source, SSP pairing, L2CAP, SDP, AVDTP и интеграцию SBC.
 
 На этой базе AudioBridge добавляет собственную архитектуру приложения:
 
@@ -19,7 +34,7 @@ AudioBridge вырос из [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayP
 - TV-friendly навигацию с хорошо видимым focus;
 - отдельную систему сборки и websrv release-пакет.
 
-Спасибо авторам FGG-PlayPods за Bluetooth/A2DP-основу, проекту [ps5-payload-dev](https://github.com/ps5-payload-dev) за SDK и websrv, а также BlueZ за SBC codec. История происхождения и лицензии сохранены намеренно.
+Отдельная благодарность **FathiGhanem** за оригинальный порт и инженерную работу, на которой основан AudioBridge. Также спасибо проекту [ps5-payload-dev](https://github.com/ps5-payload-dev) за SDK и websrv, а BlueZ — за SBC codec. История происхождения и лицензии сохранены намеренно.
 
 ## Архитектура
 
@@ -104,6 +119,15 @@ make
 ```
 
 Результат сборки — `audiobridge-gui.elf`. Web assets встраиваются в ELF, поэтому отдельная папка `web/` на PS5 не требуется.
+
+Для локального просмотра запускайте страницу через HTTP так же, как её обслуживает backend на PS5:
+
+```sh
+make preview
+# открыть http://127.0.0.1:18196/
+```
+
+При прямом открытии `web/index.html` через `file://` некоторые встроенные браузеры блокируют локальные CSS/JS subresources. Это ограничение preview-режима, а не PS5-пакета.
 
 Для прямой диагностики отправьте `audiobridge-gui.elf` в `elfldr` и откройте `http://<PS5-IP>:18195/` с другого устройства.
 
