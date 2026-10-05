@@ -13,7 +13,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#define VERSION   "1.2"
+#define VERSION   "0.1.2"
 #define STATE_DIR "/data/fgg-playpods-gui"
 #define LOG_PATH  STATE_DIR "/gui-playpods.log"
 #define LOCK_PATH STATE_DIR "/gui-playpods.lock"
