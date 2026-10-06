@@ -2,6 +2,7 @@
 #include "backend.h"
 #include "http_server.h"
 #include "log.h"
+#include "tile.h"
 
 #include <fcntl.h>
 #include <signal.h>
@@ -24,6 +25,7 @@ extern void sceKernelSetProcessName(const char *name);
 #define LOCK_PATH  STATE_DIR "/gui-playpods.lock"
 #define KEY_PATH   STATE_DIR "/paired.key"
 #define SAVED_PATH STATE_DIR "/saved-device.txt"
+#define PROFILE_PATH STATE_DIR "/audio-profile.txt"
 #define HTTP_PORT  18195
 #define LOCK_STALE_SECONDS 60
 
@@ -69,7 +71,9 @@ int main(void)
     signal(SIGINT, on_signal);
     signal(SIGTERM, on_signal);
     signal(SIGPIPE, SIG_IGN);
-    if (!backend_init(KEY_PATH, SAVED_PATH, lock_refresh)) {
+    if (tile_install_or_update(AUDIOBRIDGE_VERSION) < 0)
+        log_line("tile installation unavailable; backend will continue");
+    if (!backend_init(KEY_PATH, SAVED_PATH, PROFILE_PATH, lock_refresh)) {
         log_line("backend worker initialization failed");
         goto out;
     }

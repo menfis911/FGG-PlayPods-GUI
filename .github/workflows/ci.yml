@@ -33,13 +33,30 @@ jobs:
           sudo chmod -R +x /opt/ps5-payload-sdk/bin
 
       # Built with -Wall -Wextra -Werror, so a warning fails the build.
-      - name: Build
+      - name: Build native tile payloads
         run: |
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-          make
+          make clean all
           file audiobridge-gui.elf
+          file audiobridge-uninstall.elf
 
-      - name: Verify websrv package layout
+      - name: Verify native tile and test bundle
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          metadata = json.loads(Path('tile/sce_sys/param.json').read_text())
+          assert metadata['titleId'] == 'ABRG18195'
+          assert metadata['deeplinkUri'] == 'http://127.0.0.1:18195/'
+          assert metadata['applicationCategoryType'] == 65536
+          PY
+          export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
+          make package-test
+          unzip -t "build/AudioBridge-GUI-v$(cat VERSION)-test.zip"
+
+      # Temporary rollback coverage. Remove only after native-tile hardware
+      # install/update/reboot/uninstall verification succeeds.
+      - name: Verify legacy websrv package layout
         run: |
           mkdir -p package/AudioBridge-GUI/sce_sys
           cp audiobridge-gui.elf package/AudioBridge-GUI/eboot.elf

@@ -353,7 +353,7 @@ static void on_event(const unsigned char *ev, int len)
 
     case 0x04:  /* Connection Request */
         if (!is_ours_addr(ev + 2) || ev[11] != 1) break;   /* the system's */
-        log_line("headset connecting to us by itself");
+        log_line("Bluetooth audio device connecting to us by itself");
         memcpy(p, ev + 2, 6);
         p[6] = 0x01;    /* remain peripheral: no role switch to fail */
         hci_cmd(OP_ACCEPT_CONNECTION, p, 7);
@@ -788,12 +788,12 @@ static int find_headset(void)
         memcpy(g_target, g_key.addr, 6);
         g_target_psrm = 0x01;
         g_target_clock = 0;
-        log_line("headset paired before: %s", addr_str(g_target));
+        log_line("Bluetooth audio device paired before: %s", addr_str(g_target));
         return 1;
     }
 
-    notify("AudioBridge: searching - put the headset in pairing mode");
-    log_line("searching for a headset in pairing mode");
+    notify("AudioBridge: put the Bluetooth audio device in pairing mode");
+    log_line("searching for a Bluetooth A2DP audio device in pairing mode");
     g_found = 0;
     g_inq_done = 0;
     if (!hci_cmd(OP_INQUIRY, inquiry, (int)sizeof inquiry)) return 0;
@@ -805,7 +805,7 @@ static int find_headset(void)
         bt_poll(200);
     }
     if (!g_found) {
-        log_line("no headset in pairing mode found");
+        log_line("no Bluetooth audio device in pairing mode found");
         return 0;
     }
     return 1;
@@ -883,7 +883,8 @@ int bt_connect(const char *key_path)
     if (!g_target_selected) {
         if (!find_headset()) return 0;
     } else {
-        log_line("using GUI-selected headset: %s", addr_str(g_target));
+        log_line("using GUI-selected Bluetooth audio device: %s",
+                 addr_str(g_target));
     }
 
     memcpy(p, g_target, 6);
@@ -893,14 +894,14 @@ int bt_connect(const char *key_path)
     put16(p + 10, g_target_clock);
     p[12] = 1;                      /* allow role switch */
 
-    notify("AudioBridge: connecting to the headset");
+    notify("AudioBridge: connecting to the Bluetooth audio device");
     g_conn_done = 0;
 
     /* A paired headset that is switched on reconnects by itself; give it a
      * moment before paging it. */
     if (g_key.valid && memcmp(g_key.addr, g_target, 6) == 0 &&
         bt_wait(&g_conn_done, 3000) && g_conn_status == 0) {
-        log_line("headset connected by itself");
+        log_line("Bluetooth audio device connected by itself");
     } else {
         g_conn_done = 0;
         if (!hci_cmd(OP_CREATE_CONNECTION, p, 13)) return 0;
@@ -915,16 +916,16 @@ int bt_connect(const char *key_path)
              * be the system's, so nothing is disconnected blindly. */
             g_conn_done = 0;
             if (!bt_wait(&g_conn_done, 10000)) {
-                log_line("connection: the headset is still linked from an "
+                log_line("connection: the audio device is still linked from an "
                          "earlier session");
-                notify("AudioBridge: turn the headset off and on, then try again");
+                notify("AudioBridge: power-cycle the Bluetooth audio device, then try again");
                 return 0;
             }
         }
     }
     if (g_conn_status != 0) {
         log_line("connection failed: status %#04x%s", g_conn_status,
-                 g_conn_status == 0x04 ? " (headset off, out of range, or "
+                 g_conn_status == 0x04 ? " (audio device off, out of range, or "
                                          "connected to another device)" : "");
         return 0;
     }
@@ -939,7 +940,7 @@ int bt_connect(const char *key_path)
     if (g_auth_status != 0) {
         log_line("authentication failed: status %#04x", g_auth_status);
         if (g_key.valid) {
-            log_line("forgetting the stored key; pair the headset again");
+            log_line("forgetting the stored key; pair the audio device again");
             key_forget();
         }
         return 0;

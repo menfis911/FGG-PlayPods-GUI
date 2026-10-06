@@ -1,0 +1,14 @@
+{
+  "applicationCategoryType": 65536,
+  "titleId": "ABRG18195",
+  "deeplinkUri": "http://127.0.0.1:18195/",
+  "localizedParameters": {
+    "defaultLanguage": "en-US",
+    "en-US": {
+      "titleName": "AudioBridge"
+    },
+    "ru-RU": {
+      "titleName": "AudioBridge"
+    }
+  }
+}

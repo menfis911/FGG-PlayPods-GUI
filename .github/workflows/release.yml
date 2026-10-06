@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    name: Build and publish Web GUI package
+    name: Build and publish native-tile payloads
     runs-on: ubuntu-latest
     env:
       RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -52,15 +52,21 @@ jobs:
           sudo unzip -q -o -d /opt sdk.zip
           sudo chmod -R +x /opt/ps5-payload-sdk/bin
 
-      - name: Build native backend
+      - name: Build native backend, tile installer and uninstaller
         run: |
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
-          make
+          make clean all
           file audiobridge-gui.elf
+          file audiobridge-uninstall.elf
 
-      - name: Build websrv Homebrew package
+      - name: Build test bundle and temporary legacy websrv rollback
         run: |
-          PACKAGE="AudioBridge-GUI-websrv-${RELEASE_TAG}.zip"
+          export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
+          make package-test
+          TEST_PACKAGE="AudioBridge-GUI-${RELEASE_TAG}-test.zip"
+          cp "build/AudioBridge-GUI-v$(cat VERSION)-test.zip" "$TEST_PACKAGE"
+
+          PACKAGE="AudioBridge-GUI-legacy-websrv-${RELEASE_TAG}.zip"
           mkdir -p package/AudioBridge-GUI/sce_sys
           cp audiobridge-gui.elf package/AudioBridge-GUI/eboot.elf
           cp homebrew.js package/AudioBridge-GUI/homebrew.js
@@ -73,14 +79,16 @@ jobs:
           {
             "name": "AudioBridge-GUI",
             "filename": "audiobridge-gui.elf",
-            "description": "PS5 Bluetooth A2DP Web GUI based on FGG-PlayPods by FathiGhanem.",
+            "description": "PS5 Bluetooth audio device A2DP/SBC Web GUI with native ABRG18195 tile, based on FGG-PlayPods by FathiGhanem.",
             "version": "$RELEASE_TAG",
             "checksum": "$SHA",
             "category": "Audio",
+            "titleId": "ABRG18195",
             "source": "https://github.com/$GITHUB_REPOSITORY"
           }
           META
-          sha256sum audiobridge-gui.elf "$PACKAGE" > SHA256SUMS
+          sha256sum audiobridge-gui.elf audiobridge-uninstall.elf \
+            "$TEST_PACKAGE" "$PACKAGE" > SHA256SUMS
 
       - name: Publish immutable release
         uses: softprops/action-gh-release@v2
@@ -92,11 +100,19 @@ jobs:
           files: |
             audiobridge-gui.elf
             audiobridge-gui.elf.json
+            audiobridge-uninstall.elf
             SHA256SUMS
-            AudioBridge-GUI-websrv-*.zip
+            AudioBridge-GUI-v*-test.zip
+            AudioBridge-GUI-legacy-websrv-*.zip
           body: |
-            ## Web GUI release
+            ## Native tile test release
 
-            Install `AudioBridge-GUI` from the WebSrv ZIP into `/data/homebrew/`.
-            The package contains the native Bluetooth/A2DP backend, the websrv tile
-            extension, and the icon. The Web GUI is embedded into `eboot.elf`.
+            Send `audiobridge-gui.elf` to elfldr (normally port 9021). It runs the
+            Bluetooth/A2DP backend and HTTP server on port 18195, and installs or
+            updates the owned `ABRG18195` Media tile pointing to localhost:18195.
+
+            `audiobridge-uninstall.elf` safely removes only the owned tile and keeps
+            pairing data. See `INSTALL-RU.txt` in the test bundle for the hardware
+            test procedure. The legacy websrv ZIP is a temporary rollback asset and
+            is not the target architecture; remove it only after native-tile PS5
+            verification succeeds.

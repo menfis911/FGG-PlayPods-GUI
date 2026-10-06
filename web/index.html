@@ -69,7 +69,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow" data-i18n="nearby">Nearby</p>
-            <h3 data-i18n="bluetoothDevices">Bluetooth devices</h3>
+          <h3 data-i18n="bluetoothDevices">Bluetooth audio devices</h3>
           </div>
           <span id="deviceCount" class="count">0 found</span>
         </div>
@@ -77,7 +77,7 @@
         <div id="deviceEmpty" class="empty-state">
           <div class="radar" aria-hidden="true"><i></i></div>
           <h3 data-i18n="noDevices">No devices yet</h3>
-          <p data-i18n="noDevicesHint">Put your headphones in pairing mode, then choose Scan.</p>
+          <p data-i18n="noDevicesHint">Put a compatible A2DP/SBC audio device in pairing mode, then choose Scan.</p>
         </div>
       </section>
 
@@ -91,7 +91,7 @@
         <div id="savedList" class="device-grid"></div>
         <div id="savedEmpty" class="empty-state">
           <div class="saved-icon" aria-hidden="true">◇</div>
-          <h3 data-i18n="noSaved">No saved headphones</h3>
+          <h3 data-i18n="noSaved">No saved audio devices</h3>
           <p data-i18n="noSavedHint">A device appears here after its first successful pairing.</p>
         </div>
       </section>
@@ -112,13 +112,37 @@
             <div><h3 data-i18n="reduceMotion">Reduce motion</h3><p data-i18n="reduceMotionHint">Turn off decorative interface animation.</p></div>
             <button id="motionToggle" class="switch" role="switch" aria-checked="false"><span></span></button>
           </article>
+          <article class="setting-card profile-card">
+            <div>
+              <h3 data-i18n="latencyProfile">Latency profile</h3>
+              <p data-i18n="latencyProfileHint">Low latency uses smaller RTP packets and trims stale queued audio more aggressively.</p>
+              <p class="setting-note" data-i18n="latencyLimit">It cannot remove buffering inside the Bluetooth audio device.</p>
+            </div>
+            <div class="profile-control" role="group" aria-label="Latency profile">
+              <button type="button" data-profile="stable" data-i18n="profileStable">Stable</button>
+              <button type="button" data-profile="low_latency" data-i18n="profileLowLatency">Low latency</button>
+            </div>
+          </article>
+          <article class="setting-card diagnostics-card">
+            <div>
+              <h3 data-i18n="latencyDiagnostics">Stream diagnostics</h3>
+              <p data-i18n="latencyDiagnosticsHint">Measured in the capture, queue and RTP packetization path.</p>
+            </div>
+            <dl class="diagnostics">
+              <div><dt data-i18n="packetDuration">Packet</dt><dd id="packetDuration">—</dd></div>
+              <div><dt data-i18n="queueDuration">Queue</dt><dd id="queueDuration">—</dd></div>
+              <div><dt data-i18n="maxQueueDuration">Max queue</dt><dd id="maxQueueDuration">—</dd></div>
+              <div><dt data-i18n="trimmedAudio">Trimmed</dt><dd id="trimmedAudio">—</dd></div>
+              <div><dt>Bitpool</dt><dd id="bitpoolValue">—</dd></div>
+            </dl>
+          </article>
           <article class="setting-card info-card">
             <div><h3 data-i18n="nativeBackend">Native backend</h3><p id="backendAddress">Local API</p></div>
             <span id="controllerState" class="mini-status">Starting</span>
           </article>
           <article class="setting-card info-card">
             <div><h3 data-i18n="release">Release</h3><p>AudioBridge Web GUI</p></div>
-            <span class="version">0.2.0</span>
+            <span class="version">0.3.0</span>
           </article>
         </div>
       </section>
