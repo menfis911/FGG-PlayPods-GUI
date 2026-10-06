@@ -126,15 +126,25 @@ static void api_status(int fd)
                    state.device_count);
     used = append_json_string(body, sizeof body, used, state.error);
     used = appendf(body, sizeof body, used,
-                   ",\"audioProfile\":\"%s\",\"latency\":{"
+                   ",\"audioProfile\":\"%s\",\"selectedAudioProfile\":\"%s\","
+                   "\"activeAudioProfile\":\"%s\",\"testMetadata\":{"
+                   "\"buildVersion\":\"%s\",\"firmware\":\"record-manually\"},"
+                   "\"revisions\":{"
+                   "\"state\":%u,\"devices\":%u,\"saved\":%u},\"latency\":{"
                    "\"streaming\":%s,\"sampleRate\":%d,\"bitpool\":%d,"
                    "\"sbcFramesPerPacket\":%d,\"packetDurationUs\":%d,"
                    "\"queueMs\":%d,\"maxQueueMs\":%d,"
                    "\"targetMaxQueueMs\":%d,\"targetKeepQueueMs\":%d,"
                    "\"packets\":%ld,\"captureRecords\":%ld,"
                    "\"trimmedFrames\":%ld,\"captureOverruns\":%ld,"
-                   "\"captureRestarts\":%d}",
+                   "\"captureRestarts\":%d,\"packetSendRate\":%d,"
+                   "\"completionReports\":%ld,\"assumedCompletions\":%ld,"
+                   "\"missingReports\":%ld,\"stallMs\":%ld,\"safetyStopReason\":",
+                   a2dp_profile_name(state.selected_profile),
+                   a2dp_profile_name(state.selected_profile),
                    a2dp_profile_name(state.audio.profile),
+                   AUDIOBRIDGE_VERSION,
+                   state.state_revision, state.devices_revision, state.saved_revision,
                    state.audio.streaming ? "true" : "false",
                    state.audio.sample_rate, state.audio.bitpool,
                    state.audio.sbc_frames_per_packet,
@@ -142,7 +152,13 @@ static void api_status(int fd)
                    state.audio.max_queue_ms, state.audio.target_max_queue_ms,
                    state.audio.target_keep_queue_ms, state.audio.packets,
                    state.audio.capture_records, state.audio.trimmed_frames,
-                   state.audio.capture_overruns, state.audio.capture_restarts);
+                   state.audio.capture_overruns, state.audio.capture_restarts,
+                   state.audio.packet_send_rate, state.audio.completion_reports,
+                   state.audio.assumed_completions, state.audio.missing_reports,
+                   state.audio.stall_ms);
+    used = append_json_string(body, sizeof body, used,
+                              state.audio.safety_stop_reason);
+    used = appendf(body, sizeof body, used, "}");
     used = appendf(body, sizeof body, used, ",\"active\":");
     if (state.active_valid)
         used = append_device(body, sizeof body, used, &state.active,
@@ -249,8 +265,12 @@ static void handle_request(int fd, char *request)
         int n;
         backend_get_snapshot(&state);
         n = snprintf(profile_body, sizeof profile_body,
-                     "{\"profile\":\"%s\",\"options\":[\"stable\",\"low_latency\"]}",
-                     a2dp_profile_name(state.audio.profile));
+                     "{\"selectedProfile\":\"%s\",\"activeProfile\":\"%s\","
+                     "\"pending\":%s,\"options\":[\"stable\",\"low_latency\"]}",
+                     a2dp_profile_name(state.selected_profile),
+                     a2dp_profile_name(state.audio.profile),
+                     state.audio.streaming &&
+                     state.selected_profile != state.audio.profile ? "true" : "false");
         respond(fd, 200, "OK", "application/json; charset=utf-8",
                 profile_body, (size_t)n);
     } else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/scan") == 0) {
@@ -271,8 +291,8 @@ static void handle_request(int fd, char *request)
         char profile[16];
         int ok = json_profile(body, profile) && backend_set_audio_profile(profile);
         json_message(fd, ok ? 200 : 409, ok ? "OK" : "Conflict", ok,
-                     ok ? "Audio profile updated" :
-                          "Profile is invalid or streaming is active");
+                     ok ? "Audio profile selected for the next stream" :
+                          "Profile is invalid");
     } else if (strcmp(method, "GET") == 0 && web_asset_find(path, &asset)) {
         respond(fd, 200, "OK", asset.content_type, asset.data, asset.size);
     } else {
@@ -331,6 +351,11 @@ int http_server_run(unsigned short port, volatile int *running)
         if (select(server + 1, &reads, NULL, NULL, &timeout) > 0) {
             int client = accept(server, NULL, NULL);
             if (client >= 0) {
+                struct timeval io_timeout = { 2, 0 };
+                setsockopt(client, SOL_SOCKET, SO_RCVTIMEO,
+                           &io_timeout, sizeof io_timeout);
+                setsockopt(client, SOL_SOCKET, SO_SNDTIMEO,
+                           &io_timeout, sizeof io_timeout);
                 serve_client(client);
                 close(client);
             }

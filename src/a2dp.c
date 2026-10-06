@@ -6,6 +6,7 @@
 #include "util.h"
 
 #include <pthread.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -41,6 +42,7 @@
 static volatile int g_stop_requested;
 static pthread_mutex_t g_metrics_lock = PTHREAD_MUTEX_INITIALIZER;
 static a2dp_metrics g_metrics;
+static char g_local_safety_reason[96];
 
 static void profile_limits(a2dp_profile profile, int *max_lag_ms,
                            int *keep_lag_ms)
@@ -106,7 +108,8 @@ static void metrics_start(a2dp_profile profile, int rate, int bitpool,
 }
 
 static void metrics_update(int queue_ms, int max_queue_ms, long packets,
-                           long records, long trimmed, int restarts)
+                           long records, long trimmed, int restarts,
+                           int packet_send_rate)
 {
     pthread_mutex_lock(&g_metrics_lock);
     g_metrics.queue_ms = queue_ms;
@@ -116,6 +119,14 @@ static void metrics_update(int queue_ms, int max_queue_ms, long packets,
     g_metrics.trimmed_frames = trimmed;
     g_metrics.capture_overruns = capture_overruns();
     g_metrics.capture_restarts = restarts;
+    g_metrics.packet_send_rate = packet_send_rate;
+    g_metrics.completion_reports = bt_completion_reports();
+    g_metrics.assumed_completions = bt_completions_assumed();
+    g_metrics.missing_reports = bt_reports_missing();
+    g_metrics.stall_ms = bt_stall_ms();
+    snprintf(g_metrics.safety_stop_reason,
+             sizeof g_metrics.safety_stop_reason, "%s",
+             g_local_safety_reason[0] ? g_local_safety_reason : bt_safety_reason());
     pthread_mutex_unlock(&g_metrics_lock);
 }
 
@@ -129,6 +140,10 @@ static void metrics_stop(void)
 
 void a2dp_request_stop(void) { g_stop_requested = 1; }
 void a2dp_clear_stop(void)   { g_stop_requested = 0; }
+const char *a2dp_safety_reason(void)
+{
+    return g_local_safety_reason[0] ? g_local_safety_reason : bt_safety_reason();
+}
 
 typedef struct {
     int rate;
@@ -415,14 +430,18 @@ int a2dp_stream(int capturing)
     int frames_per_pkt, samples_per_frame, pkt_frames, pkts = 0, records = 0;
     int restarts = 0;
     long t0, last_status, sent_samples = 0, trimmed = 0;
+    long rate_t0, rate_packets = 0;
+    int packet_send_rate = 0;
     long last_metrics, max_queue_frames = 0;
     long retry_at = 0, silence_t0 = 0, silent = 0;
+    long last_packet_at, overrun_start;
     int max_lag_ms, keep_lag_ms;
     long max_lag, keep_lag;
     uint16_t seq = 1;
     unsigned char pkt[1024];
 
     profile_limits(profile, &max_lag_ms, &keep_lag_ms);
+    g_local_safety_reason[0] = '\0';
     max_lag = (long)sc->rate * max_lag_ms / 1000;
     keep_lag = (long)sc->rate * keep_lag_ms / 1000;
 
@@ -460,11 +479,13 @@ int a2dp_stream(int capturing)
              max_lag_ms, keep_lag_ms, sc->bitpool);
 
     notify("AudioBridge: audio is playing on the Bluetooth audio device");
-    t0 = last_status = last_metrics = now_ms();
+    t0 = last_status = last_metrics = rate_t0 = last_packet_at = now_ms();
+    overrun_start = capture_overruns();
     if (!capturing) silence_t0 = retry_at = t0;     /* nothing to capture yet */
 
     /* Runs until the audio device goes away or the Web API requests disconnect. */
-    while (!bt_link_lost() && !g_media.closed && !g_stop_requested) {
+    while (!bt_link_lost() && !g_media.closed && !g_stop_requested &&
+           !bt_safety_stopped()) {
         int n = 0, sent_one = 0;
 
         /* Everything the capture has ready. */
@@ -533,14 +554,37 @@ int a2dp_stream(int capturing)
                 goto done;
             }
             pkts++;
+            last_packet_at = now_ms();
             sent_one = 1;
             sent_samples += pkt_frames;
         }
 
+        if (!g_local_safety_reason[0] && g_fifo_len >= pkt_frames &&
+            now_ms() - last_packet_at >= 1500) {
+            snprintf(g_local_safety_reason, sizeof g_local_safety_reason,
+                     "A2DP packet transmission stalled for %ld ms",
+                     now_ms() - last_packet_at);
+        }
+        if (!g_local_safety_reason[0] &&
+            capture_overruns() - overrun_start >= 8 && trimmed >= sc->rate * 2L) {
+            snprintf(g_local_safety_reason, sizeof g_local_safety_reason,
+                     "Capture overruns and stale audio grew rapidly");
+        }
+        if (g_local_safety_reason[0]) {
+            log_line("bluetooth safety stop: %s", g_local_safety_reason);
+            break;
+        }
+
         if (now_ms() - last_metrics >= METRICS_MS) {
+            long rate_elapsed = now_ms() - rate_t0;
+            if (rate_elapsed >= 1000) {
+                packet_send_rate = (int)((pkts - rate_packets) * 1000 / rate_elapsed);
+                rate_packets = pkts;
+                rate_t0 = now_ms();
+            }
             metrics_update(g_fifo_len * 1000 / sc->rate,
                            (int)(max_queue_frames * 1000 / sc->rate),
-                           pkts, records, trimmed, restarts);
+                           pkts, records, trimmed, restarts, packet_send_rate);
             last_metrics = now_ms();
         }
 
@@ -564,10 +608,10 @@ int a2dp_stream(int capturing)
 done:
     metrics_update(g_fifo_len * 1000 / sc->rate,
                    (int)(max_queue_frames * 1000 / sc->rate),
-                   pkts, records, trimmed, restarts);
+                   pkts, records, trimmed, restarts, packet_send_rate);
     metrics_stop();
     log_line("stream: ended after %ld s, %d packets, %d capture records, "
              "trimmed %ld", (now_ms() - t0) / 1000, pkts, records, trimmed);
     sbc_finish(&sbc);
-    return pkts > 0;
+    return pkts > 0 && !bt_safety_stopped() && !g_local_safety_reason[0];
 }

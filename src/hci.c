@@ -30,8 +30,8 @@
  * packet goes to whichever read is first in line; many pending reads win
  * most of them. The kernel refuses transfers past a memory budget of roughly
  * 65, so event reads get buffers sized for the largest HCI event. */
-#define EVENT_READS 48
-#define ACL_READS   16
+#define EVENT_READS 1
+#define ACL_READS   1
 #define EVENT_BUF   260
 #define XFER_BUF    HCI_PKT_MAX
 
@@ -185,7 +185,7 @@ int hci_open(void)
     memset(&g_events, 0, sizeof g_events);
     memset(&g_acl, 0, sizeof g_acl);
 
-    log_line("hci: controller open alongside the system, %d event and %d ACL reads",
+    log_line("hci: conservative shared-controller mode, %d event and %d ACL read",
              g_event_reads, g_acl_reads);
     return 1;
 }

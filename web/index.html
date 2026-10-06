@@ -117,6 +117,7 @@
               <h3 data-i18n="latencyProfile">Latency profile</h3>
               <p data-i18n="latencyProfileHint">Low latency uses smaller RTP packets and trims stale queued audio more aggressively.</p>
               <p class="setting-note" data-i18n="latencyLimit">It cannot remove buffering inside the Bluetooth audio device.</p>
+              <p class="setting-note" id="profileState">—</p>
             </div>
             <div class="profile-control" role="group" aria-label="Latency profile">
               <button type="button" data-profile="stable" data-i18n="profileStable">Stable</button>
@@ -127,12 +128,21 @@
             <div>
               <h3 data-i18n="latencyDiagnostics">Stream diagnostics</h3>
               <p data-i18n="latencyDiagnosticsHint">Measured in the capture, queue and RTP packetization path.</p>
+              <p class="setting-note" data-i18n="queueDisclaimer">Software queue only; Bluetooth device buffering is not included.</p>
             </div>
             <dl class="diagnostics">
               <div><dt data-i18n="packetDuration">Packet</dt><dd id="packetDuration">—</dd></div>
               <div><dt data-i18n="queueDuration">Queue</dt><dd id="queueDuration">—</dd></div>
               <div><dt data-i18n="maxQueueDuration">Max queue</dt><dd id="maxQueueDuration">—</dd></div>
+              <div><dt data-i18n="queueTarget">Queue target</dt><dd id="queueTarget">—</dd></div>
               <div><dt data-i18n="trimmedAudio">Trimmed</dt><dd id="trimmedAudio">—</dd></div>
+              <div><dt data-i18n="captureOverruns">Overruns</dt><dd id="captureOverruns">—</dd></div>
+              <div><dt data-i18n="packetRate">Packet rate</dt><dd id="packetRate">—</dd></div>
+              <div><dt data-i18n="completionReports">Real completions</dt><dd id="completionReports">—</dd></div>
+              <div><dt data-i18n="assumedCompletions">Assumed completions</dt><dd id="assumedCompletions">—</dd></div>
+              <div><dt data-i18n="missingReports">Missing reports</dt><dd id="missingReports">—</dd></div>
+              <div><dt data-i18n="stallDuration">Stall</dt><dd id="stallDuration">—</dd></div>
+              <div><dt data-i18n="safetyStop">Safety stop</dt><dd id="safetyStop">—</dd></div>
               <div><dt>Bitpool</dt><dd id="bitpoolValue">—</dd></div>
             </dl>
           </article>
@@ -142,7 +152,7 @@
           </article>
           <article class="setting-card info-card">
             <div><h3 data-i18n="release">Release</h3><p>AudioBridge Web GUI</p></div>
-            <span class="version">0.3.0</span>
+            <span class="version">0.3.1</span>
           </article>
         </div>
       </section>

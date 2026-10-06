@@ -73,6 +73,7 @@ static void set_status(backend_status status, const char *error)
     g_state.status = status;
     if (error) snprintf(g_state.error, sizeof g_state.error, "%s", error);
     else g_state.error[0] = '\0';
+    g_state.state_revision++;
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -101,6 +102,7 @@ static void load_saved(void)
     pthread_mutex_lock(&g_lock);
     g_state.saved_valid = 0;
     memset(&g_state.saved, 0, sizeof g_state.saved);
+    g_state.saved_revision++;
     pthread_mutex_unlock(&g_lock);
     memset(&saved, 0, sizeof saved);
     f = fopen(g_key_path, "rb");
@@ -126,6 +128,7 @@ static void load_saved(void)
     pthread_mutex_lock(&g_lock);
     g_state.saved_valid = 1;
     g_state.saved = saved;
+    g_state.saved_revision++;
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -154,6 +157,7 @@ static void copy_devices(void)
     pthread_mutex_lock(&g_lock);
     memcpy(g_state.devices, devices, (size_t)count * sizeof devices[0]);
     g_state.device_count = count;
+    g_state.devices_revision++;
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -204,7 +208,7 @@ static void stop_controller(void)
     pthread_mutex_unlock(&g_lock);
 }
 
-static void run_connection(const bt_device *device, int capturing)
+static int run_connection(const bt_device *device, int capturing)
 {
     char mac[18];
     a2dp_clear_stop();
@@ -217,21 +221,30 @@ static void run_connection(const bt_device *device, int capturing)
     pthread_mutex_unlock(&g_lock);
     set_status(BACKEND_CONNECTING, NULL);
 
+    pthread_mutex_lock(&g_lock);
+    a2dp_set_profile(g_state.selected_profile);
+    pthread_mutex_unlock(&g_lock);
+
     if (!bt_connect_addr(device->addr, device->name, g_key_path)) {
         load_saved();
         if (!should_shutdown()) set_status(BACKEND_ERROR, "Bluetooth connection failed");
-        return;
+        return 0;
     }
     save_device(device);
     set_status(BACKEND_CONNECTED, NULL);
     if (!a2dp_start()) {
         set_status(BACKEND_ERROR, "A2DP setup failed");
-        return;
+        return 0;
     }
     set_status(BACKEND_STREAMING, NULL);
-    a2dp_stream(capturing);
+    if (!a2dp_stream(capturing) && a2dp_safety_reason()[0]) {
+        set_status(BACKEND_DISCONNECTING, NULL);
+        a2dp_stop();
+        return 1;
+    }
     set_status(BACKEND_DISCONNECTING, NULL);
     a2dp_stop();
+    return 0;
 }
 
 static void *worker_main(void *unused)
@@ -266,12 +279,17 @@ static void *worker_main(void *unused)
                 scanning = 0;
             }
             if (!controller_ready) controller_ready = start_controller();
-            if (controller_ready) run_connection(&device, capturing);
+            int safety_stop = 0;
+            if (controller_ready) safety_stop = run_connection(&device, capturing);
             if (controller_ready) {
                 stop_controller();
                 controller_ready = 0;
             }
-            if (!should_shutdown()) controller_ready = start_controller();
+            if (!should_shutdown() && !safety_stop)
+                controller_ready = start_controller();
+            else if (safety_stop)
+                set_status(BACKEND_ERROR, a2dp_safety_reason()[0] ?
+                           a2dp_safety_reason() : "Bluetooth safety stop");
         }
 
         if (controller_ready && scanning) {
@@ -306,8 +324,9 @@ int backend_init(const char *key_path, const char *saved_path,
     g_tick = tick;
     g_shutdown = 0;
     g_command = COMMAND_NONE;
-    a2dp_set_profile(load_audio_profile());
-    log_line("audio profile: %s", a2dp_profile_name(a2dp_get_profile()));
+    g_state.selected_profile = load_audio_profile();
+    a2dp_set_profile(g_state.selected_profile);
+    log_line("audio profile: %s", a2dp_profile_name(g_state.selected_profile));
     load_saved();
     if (pthread_create(&g_thread, NULL, worker_main, NULL) != 0) return 0;
     g_thread_started = 1;
@@ -396,15 +415,17 @@ int backend_set_audio_profile(const char *profile)
     else return 0;
 
     pthread_mutex_lock(&g_lock);
-    if (g_command == COMMAND_NONE &&
-        (g_state.status == BACKEND_READY || g_state.status == BACKEND_ERROR))
+    if (g_state.status != BACKEND_STOPPED)
         accepted = 1;
     pthread_mutex_unlock(&g_lock);
     if (!accepted) return 0;
     if (!save_audio_profile(selected)) return 0;
 
-    a2dp_set_profile(selected);
-    log_line("audio profile: changed to %s; applies to the next stream",
+    pthread_mutex_lock(&g_lock);
+    g_state.selected_profile = selected;
+    g_state.state_revision++;
+    pthread_mutex_unlock(&g_lock);
+    log_line("audio profile: selected %s; applies to the next stream",
              a2dp_profile_name(selected));
     return 1;
 }

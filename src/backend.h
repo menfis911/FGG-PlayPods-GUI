@@ -26,6 +26,10 @@ typedef struct {
     int active_valid;
     bt_device active;
     a2dp_metrics audio;
+    a2dp_profile selected_profile;
+    unsigned state_revision;
+    unsigned devices_revision;
+    unsigned saved_revision;
     char error[160];
 } backend_snapshot;
 

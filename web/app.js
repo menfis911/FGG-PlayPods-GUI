@@ -9,7 +9,11 @@
   const deviceList = $('#deviceList');
   const savedList = $('#savedList');
   const activeCard = $('#activeCard');
-  const state = { status: null, devices: [], saved: [], updates: true, offline: false };
+  const state = {
+    status: null, devices: [], saved: [], updates: true, offline: false,
+    polling: false, devicesRevision: -1, savedRevision: -1,
+    devicesKey: '', savedKey: '', activeKey: ''
+  };
   let toastTimer;
 
   const translations = {
@@ -25,7 +29,10 @@
       latencyProfile: 'Latency profile', latencyProfileHint: 'Low latency uses smaller RTP packets and trims stale queued audio more aggressively.',
       latencyLimit: 'It cannot remove buffering inside the Bluetooth audio device.', profileStable: 'Stable', profileLowLatency: 'Low latency',
       latencyDiagnostics: 'Stream diagnostics', latencyDiagnosticsHint: 'Measured in the capture, queue and RTP packetization path.',
-      packetDuration: 'Packet', queueDuration: 'Queue', maxQueueDuration: 'Max queue', trimmedAudio: 'Trimmed', frames: 'frames',
+      queueDisclaimer: 'Software queue only; Bluetooth device buffering is not included.',
+      currentProfile: 'Current profile', nextProfile: 'Next connection', reconnectProfile: 'Disconnect and connect again to apply it.',
+      packetDuration: 'RTP packet', queueDuration: 'Current queue', maxQueueDuration: 'Session max queue', queueTarget: 'Software target', trimmedAudio: 'Trimmed', frames: 'frames',
+      captureOverruns: 'Capture overruns', packetRate: 'Packet rate', completionReports: 'Real completions', assumedCompletions: 'Assumed completions', missingReports: 'Missing reports', stallDuration: 'Stall', safetyStop: 'Safety stop', none: 'None', perSecond: 'pkt/s',
       navigate: 'Navigate', select: 'Select', streamFooter: 'AudioBridge streams with A2DP / SBC',
       online: 'Online', offline: 'Offline', found: (count) => `${count} found`, signal: 'Signal', saved: 'Saved',
       connect: 'Connect', disconnect: 'Disconnect', unknownDevice: 'Unknown device', currentDevice: 'Current device',
@@ -51,7 +58,10 @@
       latencyProfile: 'Профиль задержки', latencyProfileHint: 'Low latency уменьшает RTP-пакеты и агрессивнее отбрасывает устаревший звук из очереди.',
       latencyLimit: 'Профиль не устраняет внутренний буфер Bluetooth-аудиоустройства.', profileStable: 'Стабильный', profileLowLatency: 'Low latency',
       latencyDiagnostics: 'Диагностика потока', latencyDiagnosticsHint: 'Измерения тракта захвата, очереди и RTP-пакетизации.',
-      packetDuration: 'Пакет', queueDuration: 'Очередь', maxQueueDuration: 'Макс. очередь', trimmedAudio: 'Отброшено', frames: 'кадров',
+      queueDisclaimer: 'Только программная очередь; внутренний буфер Bluetooth-устройства не учитывается.',
+      currentProfile: 'Текущий профиль', nextProfile: 'При следующем подключении', reconnectProfile: 'Отключите и подключите устройство повторно.',
+      packetDuration: 'RTP-пакет', queueDuration: 'Текущая очередь', maxQueueDuration: 'Макс. очередь сессии', queueTarget: 'Цель очереди', trimmedAudio: 'Отброшено', frames: 'кадров',
+      captureOverruns: 'Переполнения захвата', packetRate: 'Скорость пакетов', completionReports: 'Реальные подтверждения', assumedCompletions: 'Предположенные', missingReports: 'Без отчёта', stallDuration: 'Остановка', safetyStop: 'Защитная остановка', none: 'Нет', perSecond: 'пак/с',
       navigate: 'Навигация', select: 'Выбрать', streamFooter: 'AudioBridge передаёт звук через A2DP / SBC',
       online: 'В сети', offline: 'Не в сети', found: (count) => `Найдено: ${count}`, signal: 'Сигнал', saved: 'Сохранено',
       connect: 'Подключить', disconnect: 'Отключить', unknownDevice: 'Неизвестное устройство', currentDevice: 'Текущее устройство',
@@ -67,8 +77,8 @@
         'Bluetooth scan queued': 'Поиск Bluetooth-устройств запущен', 'Backend is busy': 'Backend занят другой операцией',
         'Connection queued': 'Подключение поставлено в очередь', 'Unknown device or backend is busy': 'Устройство не найдено или backend занят',
         'Disconnect requested': 'Отключение запрошено', 'No active connection': 'Нет активного подключения',
-        'Audio profile updated': 'Профиль задержки обновлён',
-        'Profile is invalid or streaming is active': 'Профиль нельзя изменить во время активного потока',
+        'Audio profile selected for the next stream': 'Профиль выбран для следующего подключения',
+        'Profile is invalid': 'Некорректный профиль',
         'Bluetooth controller did not answer': 'Bluetooth-контроллер не ответил', 'Bluetooth connection failed': 'Не удалось подключиться по Bluetooth',
         'A2DP setup failed': 'Не удалось настроить A2DP', 'Unable to start Bluetooth scan': 'Не удалось запустить поиск Bluetooth'
       }
@@ -132,27 +142,43 @@
     $('#controllerState').textContent = status.controller ? t('online') : t('offline');
     $('#deviceCount').textContent = t('found')(status.deviceCount);
     $$('[data-profile]').forEach((button) => {
-      const selected = button.dataset.profile === status.audioProfile;
+      const selected = button.dataset.profile === status.selectedAudioProfile;
       button.classList.toggle('is-active', selected);
       button.setAttribute('aria-pressed', String(selected));
-      button.disabled = !['ready', 'error'].includes(status.status);
+      button.disabled = false;
     });
 
     const latency = status.latency || {};
+    const activeProfile = status.activeAudioProfile === 'low_latency' ? t('profileLowLatency') : t('profileStable');
+    const selectedProfile = status.selectedAudioProfile === 'low_latency' ? t('profileLowLatency') : t('profileStable');
+    const pending = status.streaming && status.activeAudioProfile !== status.selectedAudioProfile;
+    $('#profileState').textContent = status.streaming
+      ? `${t('currentProfile')}: ${activeProfile}. ${t('nextProfile')}: ${selectedProfile}.${pending ? ` ${t('reconnectProfile')}` : ''}`
+      : `${t('nextProfile')}: ${selectedProfile}.`;
     $('#packetDuration').textContent = latency.packetDurationUs ? `${(latency.packetDurationUs / 1000).toFixed(1)} ms` : '—';
-    $('#queueDuration').textContent = latency.streaming ? `${latency.queueMs} / ${latency.targetMaxQueueMs} ms` : '—';
+    $('#queueDuration').textContent = latency.streaming ? `${latency.queueMs} ms` : '—';
     $('#maxQueueDuration').textContent = latency.maxQueueMs ? `${latency.maxQueueMs} ms` : '—';
+    $('#queueTarget').textContent = latency.targetMaxQueueMs ? `${latency.targetKeepQueueMs}–${latency.targetMaxQueueMs} ms` : '—';
     $('#trimmedAudio').textContent = latency.streaming || latency.trimmedFrames ? `${latency.trimmedFrames || 0} ${t('frames')}` : '—';
+    $('#captureOverruns').textContent = latency.captureOverruns ?? '—';
+    $('#packetRate').textContent = latency.streaming ? `${latency.packetSendRate || 0} ${t('perSecond')}` : '—';
+    $('#completionReports').textContent = latency.completionReports ?? '—';
+    $('#assumedCompletions').textContent = latency.assumedCompletions ?? '—';
+    $('#missingReports').textContent = latency.missingReports ?? '—';
+    $('#stallDuration').textContent = latency.stallMs ? `${latency.stallMs} ms` : '—';
+    $('#safetyStop').textContent = latency.safetyStopReason || t('none');
     $('#bitpoolValue').textContent = latency.bitpool || '—';
 
-    if (status.active) {
+    const activeKey = status.active ? `${status.active.mac}|${status.active.name}|${label}` : '';
+    if (status.active && activeKey !== state.activeKey) {
       activeCard.classList.remove('is-hidden');
       activeCard.innerHTML = `<div><p class="eyebrow">${t('currentDevice')}</p><h3></h3><p>${status.active.mac} · ${label}</p></div><button class="device-action disconnect">${t('disconnect')}</button>`;
       activeCard.querySelector('h3').textContent = status.active.name;
       activeCard.querySelector('button').addEventListener('click', disconnect);
-    } else {
+    } else if (!status.active) {
       activeCard.classList.add('is-hidden');
     }
+    state.activeKey = activeKey;
   }
 
   function renderOffline() {
@@ -164,27 +190,46 @@
   }
 
   function renderDevices(devices) {
+    const key = JSON.stringify(devices);
+    if (key === state.devicesKey) return;
+    state.devicesKey = key;
     state.devices = devices;
     deviceList.replaceChildren(...devices.map((device) => deviceCard(device)));
     $('#deviceEmpty').classList.toggle('is-hidden', devices.length > 0);
   }
 
   function renderSaved(devices) {
+    const key = JSON.stringify(devices);
+    if (key === state.savedKey) return;
+    state.savedKey = key;
     state.saved = devices;
     savedList.replaceChildren(...devices.map((device) => deviceCard(device, true)));
     $('#savedEmpty').classList.toggle('is-hidden', devices.length > 0);
   }
 
-  async function refresh() {
+  async function refresh(forceLists = false) {
+    if (state.polling) return;
+    state.polling = true;
     try {
-      const [status, devices, saved] = await Promise.all([
-        api('/api/status'), api('/api/devices'), api('/api/saved')
-      ]);
+      const status = await api('/api/status');
+      const previousStatus = state.status?.status;
       renderStatus(status);
-      renderDevices(devices.devices);
-      renderSaved(saved.devices);
+      const revisions = status.revisions || {};
+      const scanEdge = previousStatus === 'scanning' || status.status === 'scanning';
+      if (forceLists || scanEdge || revisions.devices !== state.devicesRevision) {
+        const devices = await api('/api/devices');
+        renderDevices(devices.devices);
+        state.devicesRevision = revisions.devices;
+      }
+      if (forceLists || revisions.saved !== state.savedRevision) {
+        const saved = await api('/api/saved');
+        renderSaved(saved.devices);
+        state.savedRevision = revisions.saved;
+      }
     } catch (error) {
       renderOffline();
+    } finally {
+      state.polling = false;
     }
   }
 
@@ -192,7 +237,7 @@
     try {
       const result = await api(path, { method: 'POST', body: body ? JSON.stringify(body) : '{}' });
       toast(translateMessage(result.message));
-      await refresh();
+      await refresh(true);
     } catch (error) {
       toast(error.message);
     }
@@ -259,5 +304,9 @@
 
   applyLanguage();
   refresh();
-  setInterval(() => { if (state.updates) refresh(); }, 1200);
+  const poll = async () => {
+    if (state.updates) await refresh();
+    setTimeout(poll, 1200);
+  };
+  setTimeout(poll, 1200);
 })();

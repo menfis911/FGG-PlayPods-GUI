@@ -89,5 +89,10 @@ int  bt_credits(void);
 /* Packets sent minus packets reported sent: the reports the system's driver
  * took, plus whatever is in the controller right now. */
 long bt_reports_missing(void);
+long bt_completion_reports(void);
+long bt_packets_sent(void);
+long bt_stall_ms(void);
+int  bt_safety_stopped(void);
+const char *bt_safety_reason(void);
 
 #endif
