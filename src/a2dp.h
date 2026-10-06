@@ -28,6 +28,12 @@ typedef struct {
     long trimmed_frames;
     long capture_overruns;
     int capture_restarts;
+    int packet_send_rate;
+    long completion_reports;
+    long assumed_completions;
+    long missing_reports;
+    long stall_ms;
+    char safety_stop_reason[96];
 } a2dp_metrics;
 
 void a2dp_set_profile(a2dp_profile profile);
@@ -45,6 +51,7 @@ int  a2dp_start(void);
 int  a2dp_stream(int capturing);
 void a2dp_request_stop(void);
 void a2dp_clear_stop(void);
+const char *a2dp_safety_reason(void);
 
 /* Closes the stream and its channels, if the audio device is still there. */
 void a2dp_stop(void);

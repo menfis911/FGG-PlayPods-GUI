@@ -23,12 +23,6 @@
 #define OP_SET_ENCRYPTION       0x0413
 #define OP_IO_CAP_REPLY         0x042B
 #define OP_USER_CONFIRM_REPLY   0x042C
-#define OP_SET_EVENT_MASK       0x0C01
-#define OP_WRITE_LOCAL_NAME     0x0C13
-#define OP_WRITE_SCAN_ENABLE    0x0C1A
-#define OP_WRITE_CLASS_OF_DEV   0x0C24
-#define OP_WRITE_INQUIRY_MODE   0x0C45
-#define OP_WRITE_SSP_MODE       0x0C56
 #define OP_READ_BUFFER_SIZE     0x1005
 
 #define CID_SIGNALING 0x0001
@@ -42,7 +36,9 @@
  * to the system's driver. A packet not reported within INFLIGHT_MS is taken
  * as sent; the radio sends one in far less time. */
 #define INFLIGHT_MAX  64
-#define INFLIGHT_MS   60
+#define INFLIGHT_MS   250
+#define MISSING_REPORT_LIMIT 8
+#define COMPLETION_STALL_MS  1500
 
 typedef struct {
     int valid;
@@ -88,8 +84,13 @@ static int g_credits, g_credits_max;
 static long g_inflight[INFLIGHT_MAX];
 static int g_if_head, g_if_count;
 static long g_assumed;
+static long g_assumed_since_report;
 static long g_sent, g_reported;     /* ACL packets, and their reports */
 static long g_system_replies;
+static long g_last_real_completion;
+static long g_stall_started;
+static int g_safety_stopped;
+static char g_safety_reason[96];
 
 static void (*g_tick)(void);
 static long g_last_tick;
@@ -140,12 +141,6 @@ static void key_save(void)
     fclose(f);
 }
 
-static void key_forget(void)
-{
-    memset(&g_key, 0, sizeof g_key);
-    remove(g_key_path);
-}
-
 static l2cap_chan *chan_by_scid(unsigned cid)
 {
     int i;
@@ -178,9 +173,7 @@ static int is_our_opcode(unsigned op)
         OP_INQUIRY, OP_INQUIRY_CANCEL, OP_CREATE_CONNECTION, OP_DISCONNECT,
         OP_ACCEPT_CONNECTION, OP_LINK_KEY_REPLY, OP_LINK_KEY_NEG_REPLY,
         OP_PIN_CODE_REPLY, OP_AUTH_REQUESTED, OP_SET_ENCRYPTION,
-        OP_IO_CAP_REPLY, OP_USER_CONFIRM_REPLY, OP_SET_EVENT_MASK,
-        OP_WRITE_LOCAL_NAME, OP_WRITE_SCAN_ENABLE, OP_WRITE_CLASS_OF_DEV,
-        OP_WRITE_INQUIRY_MODE, OP_WRITE_SSP_MODE, OP_READ_BUFFER_SIZE,
+        OP_IO_CAP_REPLY, OP_USER_CONFIRM_REPLY, OP_READ_BUFFER_SIZE,
     };
     size_t i;
 
@@ -222,22 +215,40 @@ static void inflight_expire(void)
     long now = now_ms();
 
     while (g_if_count > 0 && now - g_inflight[g_if_head] > INFLIGHT_MS) {
+        if (g_assumed_since_report >= MISSING_REPORT_LIMIT) break;
         g_if_head = (g_if_head + 1) % INFLIGHT_MAX;
         g_if_count--;
         g_assumed++;
+        g_assumed_since_report++;
         if (g_credits < g_credits_max) g_credits++;
+    }
+
+    if (g_if_count > 0 && !g_stall_started) g_stall_started = now;
+    if (g_if_count == 0) g_stall_started = 0;
+    if (!g_safety_stopped && g_assumed_since_report >= MISSING_REPORT_LIMIT &&
+        g_last_real_completion && now - g_last_real_completion >= COMPLETION_STALL_MS) {
+        g_safety_stopped = 1;
+        snprintf(g_safety_reason, sizeof g_safety_reason,
+                 "ACL completion reports absent for %ld ms",
+                 now - g_last_real_completion);
+        log_line("bluetooth safety stop: %s", g_safety_reason);
     }
 }
 
 int bt_can_send(void)
 {
     inflight_expire();
-    return g_credits > 0;
+    return !g_safety_stopped && g_credits > 0;
 }
 
 int  bt_credits(void)              { return g_credits; }
 long bt_reports_missing(void)      { return g_sent - g_reported; }
 long bt_completions_assumed(void)  { return g_assumed; }
+long bt_completion_reports(void)   { return g_reported; }
+long bt_packets_sent(void)         { return g_sent; }
+long bt_stall_ms(void)             { return g_stall_started ? now_ms() - g_stall_started : 0; }
+int  bt_safety_stopped(void)       { return g_safety_stopped; }
+const char *bt_safety_reason(void) { return g_safety_reason; }
 int  bt_link_lost(void)            { return g_disconnected; }
 void bt_set_tick(void (*fn)(void)) { g_tick = fn; }
 void bt_request_stop(void)         { g_stop_requested = 1; }
@@ -418,6 +429,8 @@ static void on_event(const unsigned char *ev, int len)
             if (!is_ours_handle(ev + 3 + i * 4)) continue;
             g_credits += done;
             g_reported += done;
+            g_last_real_completion = now_ms();
+            g_assumed_since_report = 0;
             inflight_done(done);
         }
         if (g_credits_max && g_credits > g_credits_max) g_credits = g_credits_max;
@@ -478,6 +491,12 @@ static void on_event(const unsigned char *ev, int len)
         for (i = 0; i < len && i < 32; i++)
             n += snprintf(hex + n, sizeof hex - (size_t)n, "%02x ", ev[i]);
         log_line("chip vendor event (%d bytes): %s", len, hex);
+        if (g_conn_done && !g_disconnected) {
+            g_safety_stopped = 1;
+            snprintf(g_safety_reason, sizeof g_safety_reason,
+                     "Bluetooth controller vendor fault event");
+            log_line("bluetooth safety stop: %s", g_safety_reason);
+        }
         break;
     }
 
@@ -707,31 +726,15 @@ static int hci_sync(unsigned opcode, const void *params, int plen)
  * a reset would pull that state from under it. */
 static int setup_controller(void)
 {
-    static const unsigned char mask[8] = { 0xFF, 0xFF, 0xFF, 0xFF,
-                                           0xFF, 0xFF, 0xFF, 0x3F };
-    static const unsigned char one[1] = { 1 };
-    static const unsigned char two[1] = { 2 };
-    /* Major class computer, minor desktop: an ordinary audio source. */
-    static const unsigned char cod[3] = { 0x04, 0x01, 0x00 };
-    unsigned char name[248];
-
     if (!hci_sync(OP_READ_BUFFER_SIZE, NULL, 0)) return 0;
     g_acl_mtu = le16(g_cc + 6);
     g_credits = g_credits_max = (int)le16(g_cc + 9);
     log_line("controller: %d ACL buffers of %u bytes", g_credits, g_acl_mtu);
 
-    hci_sync(OP_SET_EVENT_MASK, mask, (int)sizeof mask);
-    hci_sync(OP_WRITE_SSP_MODE, one, 1);
-    hci_sync(OP_WRITE_INQUIRY_MODE, two, 1);
-    hci_sync(OP_WRITE_CLASS_OF_DEV, cod, 3);
-
-    memset(name, 0, sizeof name);
-    memcpy(name, "AudioBridge-GUI", 15);
-    hci_sync(OP_WRITE_LOCAL_NAME, name, (int)sizeof name);
-
-    /* Page scan on, inquiry scan off: a paired headset reconnects to its
-     * source by itself, and must be able to reach us to do it. */
-    hci_sync(OP_WRITE_SCAN_ENABLE, two, 1);
+    /* Do not mutate controller-global event, discovery, identity or pairing
+     * configuration. The PS5 owns those settings and changing them can break
+     * system devices such as DualSense. Outgoing inquiry/page/authentication
+     * commands below are link-scoped. */
     return 1;
 }
 
@@ -747,6 +750,11 @@ int bt_start(void)
     g_nchans = 0;
     g_l2len = g_l2need = 0;
     g_if_head = g_if_count = 0;
+    g_assumed = g_assumed_since_report = g_sent = g_reported = 0;
+    g_last_real_completion = now_ms();
+    g_stall_started = 0;
+    g_safety_stopped = 0;
+    g_safety_reason[0] = '\0';
     /* Right after a previous session the controller can take a moment to
      * answer; closing and trying again a little later works. */
     for (attempt = 1; attempt <= 4; attempt++) {
@@ -939,10 +947,8 @@ int bt_connect(const char *key_path)
     }
     if (g_auth_status != 0) {
         log_line("authentication failed: status %#04x", g_auth_status);
-        if (g_key.valid) {
-            log_line("forgetting the stored key; pair the audio device again");
-            key_forget();
-        }
+        if (g_key.valid)
+            log_line("stored key preserved; retry or explicitly re-pair the audio device");
         return 0;
     }
 

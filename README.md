@@ -16,9 +16,9 @@
 | **Устройства** | наушники, гарнитуры в режиме A2DP, колонки, саундбары, ресиверы и адаптеры |
 | **Управление** | встроенный RU/EN Web GUI и additive JSON API |
 | **Запуск** | один payload через elfldr, обычно порт `9021` |
-| **Версия** | `0.3.0` |
+| **Версия** | `0.3.1-test` |
 
-AudioBridge — самостоятельное продолжение и производная работа на базе FGG-PlayPods. Проверенная реализация захвата звука, Bluetooth, AVDTP, A2DP и SBC сохранена. Проект добавляет асинхронный backend, выбор устройства, HTTP API, Web GUI, измеримую диагностику задержки и собственную постоянную плитку PS5.
+AudioBridge — самостоятельное продолжение и производная работа на базе FGG-PlayPods. Рабочие discovery, pairing key, reconnect, capture, L2CAP/SDP/AVDTP и SBC/A2DP пути сохранены. Версия 0.3.1-test добавляет защитное прекращение потока и уменьшает вмешательство в общий Bluetooth-контроллер после аппаратно обнаруженной деградации с DualSense.
 
 ## Происхождение и атрибуция
 
@@ -85,14 +85,14 @@ elfldr :9021 ── запускает audiobridge-gui.elf
 | Stable | максимально допустимое число SBC frames | 250 ms | 80 ms | прежнее безопасное поведение |
 | Low latency | не более 2 SBC frames | 80 ms | 24 ms | меньше программной packet/queue задержки |
 
-Профиль сохраняется в `/data/fgg-playpods-gui/audio-profile.txt` и применяется к следующему stream. Во время подключения или streaming изменение отклоняется, чтобы не перестраивать активный AVDTP поток. Low latency может увеличить чувствительность к radio stalls; он не устраняет аппаратный буфер Bluetooth-аудиоустройства.
+Профиль сохраняется в `/data/fgg-playpods-gui/audio-profile.txt` и применяется к следующему stream. Его можно выбрать во время streaming, но активный AVDTP поток не перестраивается: GUI отдельно показывает текущий и выбранный профиль и просит выполнить Disconnect/Connect. Low latency может увеличить чувствительность к radio stalls; он не устраняет аппаратный буфер Bluetooth-аудиоустройства.
 
 Каждые 250 ms для API обновляются:
 
-- текущая и максимальная PCM queue в миллисекундах;
+- текущая и максимальная за сессию программная PCM queue в миллисекундах (это не end-to-end Bluetooth latency);
 - длительность RTP-пакета и SBC frames per packet;
 - sample rate и bitpool;
-- packet/capture record counters;
+- packet send rate, реальные completion reports, assumed completions, missing reports и stall duration;
 - trimmed PCM frames, capture overruns и capture restarts.
 
 Каждые 5 секунд те же ключевые значения записываются в лог.
@@ -112,7 +112,7 @@ Backend слушает все IPv4-интерфейсы на порту `18195`.
 | `GET` | `/api/audio-profile` | текущий профиль и допустимые значения |
 | `POST` | `/api/audio-profile` | `{"profile":"stable"}` или `{"profile":"low_latency"}` |
 
-Команды scan/connect/disconnect принимаются с `202 Accepted`. Несовместимая параллельная операция возвращает `409 Conflict`. Изменение профиля возвращает `200 OK`, а во время активного потока — `409 Conflict`.
+Команды scan/connect/disconnect принимаются с `202 Accepted`. Несовместимая параллельная операция возвращает `409 Conflict`. Выбор профиля возвращает `200 OK` и во время потока сохраняет pending-профиль для следующего подключения.
 
 ## Совместимые данные
 
@@ -152,7 +152,7 @@ make package-test
 ```text
 audiobridge-gui.elf
 audiobridge-uninstall.elf
-build/AudioBridge-GUI-v0.3.0-test.zip
+build/AudioBridge-GUI-v0.3.1-test.zip
 ```
 
 Web assets встроены в основной ELF. Для локального просмотра GUI:
@@ -169,6 +169,12 @@ make preview
 `homebrew.js` и проверка старого `/data/homebrew/AudioBridge-GUI` пакета временно сохранены только как rollback до аппаратного подтверждения плитки `ABRG18195`. Они не являются частью целевой архитектуры. Удалять legacy package из release следует после успешного PS5-теста установки, reboot, deeplink, обновления и uninstall.
 
 ## Firmware-риски и обязательный тест на PS5
+
+### Результат теста firmware 13.00 для 0.3.0-test
+
+Плитка `ABRG18195` установилась, пережила reboot, deeplink и внешний Web GUI работали, JBL Flip 4 находился, pairing key сохранялся, reconnect и A2DP/SBC звук работали. Однако при попытке подключить DualSense во время streaming появились vendor event, пропуски completion reports, capture overruns и массовый trim; DualSense не подключился, консоль потребовала физической перезагрузки. Low Latency не был реально протестирован, потому что переключатель был disabled. Поэтому firmware 13.00 пока не считается полностью поддержанной, а merge запрещён до повторного hardware gate.
+
+0.3.1-test не выполняет HCI Reset и больше не меняет Event Mask, SSP Mode, Inquiry Mode, Class of Device, Local Name или Scan Enable. Число конкурирующих IN reads уменьшено до одного на endpoint. При vendor fault, остановке отправки, быстром росте overruns/trim или длительном отсутствии реальных completion reports поток прекращается, закрывается только собственный handle, а pairing key сохраняется. Это ограничивает ущерб, но userland-race с системным USB Bluetooth driver архитектурно остаётся и требует проверки на PS5.
 
 `sceAppInstUtilAppInstallTitleDir` — private/undocumented API, а поведение Media/WebApp metadata может меняться между firmware. До релиза обязательно проверить:
 

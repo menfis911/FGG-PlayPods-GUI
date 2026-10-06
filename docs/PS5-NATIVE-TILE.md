@@ -57,18 +57,26 @@ These interfaces and formats are not public Sony SDK contracts:
 
 ## Required real-PS5 gate
 
+### Recorded firmware 13.00 result (0.3.0-test)
+
+Passed: tile installation/name/icon, localhost deeplink, LAN GUI on `:18195`, discovery, JBL Flip 4 pairing/key persistence/reconnect, A2DP/SBC audio, and tile persistence after reboot. Failed: connecting DualSense during A2DP produced a 69-byte vendor event followed by missing/assumed completions, queue growth, 87 capture overruns and 184960 trimmed frames; DualSense did not connect and the console required a physical reboot. Low Latency was not tested because its control was disabled during streaming. This is a release blocker.
+
+The inherited implementation races the PS5 system driver for the same USB event and ACL-IN endpoints and deliberately kept 48+16 reads pending. It also restored ACL credits after 60 ms without a real completion event. Version 0.3.1-test reduces this to one read per endpoint, removes all controller-global writes except the read-only buffer-size query, and stops its own stream/link on sustained missing real completions, vendor faults, packet stalls, or rapidly growing overrun/trim counters. This is a fail-safe, not proof that the firmware can safely multiplex arbitrary system Bluetooth activity. Keep the legacy websrv rollback until the following gate passes.
+
 Record firmware, exploit/elfldr version and the complete
 `/data/fgg-playpods-gui/gui-playpods.log` for each run.
 
 1. Fresh console state: send `audiobridge-gui.elf` to port 9021.
 2. Confirm notifications, backend access by LAN IP, tile name/icon and Media placement.
 3. Open the tile and verify the URL reaches the same GUI through `127.0.0.1:18195`.
-4. Scan and connect a known A2DP/SBC device; verify sound and DualSense operation.
+4. Scan and connect a known A2DP/SBC device; verify sound. Record firmware/exploit manually because no safe public firmware query is used.
 5. Record `/api/status` after at least 30 seconds in Stable mode.
-6. Disconnect, select Low latency, reconnect, and record `/api/status` plus five-second stream log lines for at least five minutes.
-7. Power-cycle or reboot. Confirm the tile remains. Open it before sending the payload and record the WebKit failure screen/time-to-error.
-8. Send the payload again. Confirm the existing tile opens, pairing is retained, and only one backend instance runs.
-9. Build a payload with a newer `VERSION`, send it, and verify icon/metadata refresh without pairing loss.
-10. Send `audiobridge-uninstall.elf`. Confirm only `ABRG18195` disappears and `/data/fgg-playpods-gui/{paired.key,saved-device.txt}` remains.
+6. While streaming, select Low Latency. Confirm the active profile remains Stable, the selected profile changes, and the GUI asks for Disconnect/Connect. Reconnect and record `/api/status` plus five-second stream log lines for at least five minutes.
+7. During Stable streaming, pair/connect DualSense and use it for at least 15 minutes. Repeat in Low Latency. Confirm controller input and audio remain responsive. Watch real/assumed/missing completions, packet rate, stall, queue, overruns and trim.
+8. If metrics degrade, confirm AudioBridge safety-stops, reports the exact reason through `/api/status`, closes only its audio connection, preserves the pairing key, and the PS5/DualSense remain usable without reboot.
+9. Power-cycle or reboot. Confirm the tile remains. Open it before sending the payload and record the WebKit failure screen/time-to-error.
+10. Send the payload again. Confirm the existing tile opens, pairing is retained, and only one backend instance runs.
+11. Build a payload with a newer `VERSION`, send it, and verify icon/metadata refresh without pairing loss.
+12. Send `audiobridge-uninstall.elf`. Confirm only `ABRG18195` disappears and `/data/fgg-playpods-gui/{paired.key,saved-device.txt}` remains.
 
-Do not delete the temporary legacy websrv rollback package from release/CI until all ten checks pass on target firmware.
+Do not merge or delete the temporary legacy websrv rollback package until all twelve checks pass on firmware 13.00.

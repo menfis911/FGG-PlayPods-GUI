@@ -27,7 +27,7 @@ body {
 }
 button { font: inherit; }
 
-.ambient { position: fixed; border-radius: 50%; filter: blur(100px); opacity: .18; pointer-events: none; }
+.ambient { display: none; }
 .ambient-one { width: 28rem; height: 28rem; right: -12rem; top: 18%; background: #297dff; animation: float 11s ease-in-out infinite; }
 .ambient-two { width: 20rem; height: 20rem; left: -9rem; bottom: 5%; background: #23c8ff; animation: float 14s ease-in-out infinite reverse; }
 .shell { width: min(92vw, 1500px); margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; position: relative; }
@@ -39,7 +39,7 @@ button { font: inherit; }
 .language-switch button.is-active { background: rgba(95,157,255,.22); color: white; box-shadow: inset 0 0 0 1px rgba(126,216,255,.16); }
 .brand { display: flex; align-items: center; gap: 22px; }
 .brand-mark { width: 66px; height: 66px; border-radius: 21px; background: linear-gradient(145deg, #78c7ff, #286eea); display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 16px 40px rgba(36, 121, 255, .34); }
-.brand-mark span { width: 7px; border-radius: 8px; background: white; animation: wave 1.5s ease-in-out infinite; }
+.brand-mark span { width: 7px; border-radius: 8px; background: white; }
 .brand-mark span:nth-child(1) { height: 18px; }
 .brand-mark span:nth-child(2) { height: 32px; animation-delay: .15s; }
 .brand-mark span:nth-child(3) { height: 23px; animation-delay: .3s; }
@@ -62,9 +62,9 @@ h3 { margin-bottom: 0; font-size: 27px; letter-spacing: -.025em; }
 .tab:hover { color: white; background: rgba(255,255,255,.06); }
 
 main { flex: 1; padding: 25px 0 60px; }
-.view { display: none; animation: enter .28s ease both; }
+.view { display: none; }
 .view.is-active { display: block; }
-.hero-card { min-height: 310px; padding: 44px 48px; border: 1px solid rgba(114,180,255,.15); border-radius: 34px; background: linear-gradient(125deg, rgba(22,45,78,.97), rgba(10,25,47,.88)); display: flex; align-items: center; justify-content: space-between; gap: 40px; box-shadow: 0 30px 80px rgba(0,0,0,.24); overflow: hidden; position: relative; }
+.hero-card { min-height: 310px; padding: 44px 48px; border: 1px solid rgba(114,180,255,.15); border-radius: 34px; background: #102541; display: flex; align-items: center; justify-content: space-between; gap: 40px; box-shadow: 0 18px 44px rgba(0,0,0,.20); overflow: hidden; position: relative; }
 .hero-card::after { content: ""; position: absolute; width: 430px; height: 430px; right: -170px; top: -170px; border: 1px solid rgba(95,157,255,.28); border-radius: 50%; box-shadow: 0 0 0 54px rgba(95,157,255,.04), 0 0 0 108px rgba(95,157,255,.025); }
 .hero-content { position: relative; z-index: 2; }
 .hero-copy { margin-bottom: 0; color: var(--muted); font-size: 21px; line-height: 1.5; }
@@ -79,7 +79,7 @@ main { flex: 1; padding: 25px 0 60px; }
 body[data-backend-state="scanning"] .signal-ring { animation: signal 1.8s ease-out infinite; }
 body[data-backend-state="scanning"] .ring-two { animation-delay: .35s; }
 body[data-backend-state="scanning"] .ring-three { animation-delay: .7s; }
-body[data-backend-state="streaming"] .bluetooth-core { animation: glow 2s ease-in-out infinite; }
+body[data-backend-state="streaming"] .bluetooth-core { box-shadow: 0 0 30px rgba(72,200,255,.36); }
 .action-button { min-width: 190px; min-height: 70px; padding: 16px 28px; border-radius: 22px; background: linear-gradient(145deg, #70bcff, #3478ed); display: flex; align-items: center; justify-content: center; gap: 15px; font-size: 23px; font-weight: 800; box-shadow: 0 18px 40px rgba(38,119,236,.34); position: relative; z-index: 1; transition: transform .18s ease, filter .18s ease; }
 .action-button:hover { transform: translateY(-2px); filter: brightness(1.08); }
 .action-button:disabled { opacity: .48; cursor: default; transform: none; }
@@ -124,7 +124,7 @@ body[data-backend-state="streaming"] .bluetooth-core { animation: glow 2s ease-i
 .profile-control button.is-active { background: rgba(95,157,255,.24); color: white; box-shadow: inset 0 0 0 1px rgba(126,216,255,.18); }
 .profile-control button:disabled { opacity: .58; cursor: default; }
 .diagnostics-card { align-items: flex-start; }
-.diagnostics { min-width: 58%; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; }
+.diagnostics { min-width: 68%; margin: 0; display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; }
 .diagnostics div { padding: 14px; border-radius: 15px; background: rgba(255,255,255,.035); }
 .diagnostics dt { color: var(--muted); font-size: 13px; }
 .diagnostics dd { margin: 6px 0 0; color: #dce7ff; font-size: 17px; font-weight: 800; }
@@ -160,6 +160,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 4px solid var(--focus)
   .profile-card, .diagnostics-card { align-items: stretch; flex-direction: column; }
   .profile-control, .diagnostics { min-width: 0; width: 100%; }
   .diagnostics { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 1200px), (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  .hero-card::after { display: none; }
+  .brand-mark, .bluetooth-core, .action-button, .toast { box-shadow: none; }
 }
 
 @media (max-width: 650px) {

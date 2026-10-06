@@ -5,9 +5,10 @@
  * is shared with it here. Nothing is detached from the system's driver:
  * detaching any of the chip's interfaces takes the DualSense down with it.
  *
- * Sharing has one consequence the callers must live with: the system's
- * driver keeps its own reads pending on the first controller's endpoints, so
- * a small fraction of incoming events and ACL packets never arrive here.
+ * Sharing is inherently lossy: the system driver and this process race for
+ * packets on the same endpoints.  Keep only one read pending per IN endpoint
+ * to minimise packets stolen from the system.  Safe coexistence still needs
+ * hardware validation; callers must stop on sustained missing completions.
  */
 #ifndef FGG_HCI_H
 #define FGG_HCI_H
