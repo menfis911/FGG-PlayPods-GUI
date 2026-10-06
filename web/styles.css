@@ -33,6 +33,10 @@ button { font: inherit; }
 .shell { width: min(92vw, 1500px); margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; position: relative; }
 
 .topbar { min-height: 144px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.language-switch { padding: 5px; border: 1px solid var(--line); border-radius: 14px; display: flex; gap: 4px; background: rgba(255,255,255,.035); }
+.language-switch button { min-width: 48px; min-height: 40px; padding: 7px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 800; cursor: pointer; }
+.language-switch button.is-active { background: rgba(95,157,255,.22); color: white; box-shadow: inset 0 0 0 1px rgba(126,216,255,.16); }
 .brand { display: flex; align-items: center; gap: 22px; }
 .brand-mark { width: 66px; height: 66px; border-radius: 21px; background: linear-gradient(145deg, #78c7ff, #286eea); display: flex; align-items: center; justify-content: center; gap: 5px; box-shadow: 0 16px 40px rgba(36, 121, 255, .34); }
 .brand-mark span { width: 7px; border-radius: 8px; background: white; animation: wave 1.5s ease-in-out infinite; }
@@ -150,6 +154,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 4px solid var(--focus)
   .brand-mark { width: 54px; height: 54px; }
   .status-pill { min-width: 0; padding: 13px; }
   .status-pill span { display: none; }
+  .topbar-actions { gap: 8px; }
+  .language-switch button { min-width: 40px; }
   .tabs { overflow-x: auto; }
   .tab { white-space: nowrap; font-size: 17px; padding: 14px 18px; }
   .hero-card { padding: 30px; }
