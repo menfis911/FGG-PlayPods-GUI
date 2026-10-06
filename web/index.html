@@ -3,103 +3,121 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-  <meta name="theme-color" content="#090d18">
-  <title>FGG-PlayPods-GUI</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta name="theme-color" content="#07111f">
+  <title>AudioBridge — GUI</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
   <div class="shell">
     <header class="topbar">
-      <div class="brand" aria-label="FGG PlayPods GUI">
+      <div class="brand" aria-label="AudioBridge GUI">
         <div class="brand-mark" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
         <div>
-          <p class="eyebrow">PS5 Bluetooth audio</p>
-          <h1>FGG PlayPods</h1>
+          <p class="eyebrow" data-i18n="brandSubtitle">PS5 Bluetooth audio</p>
+          <h1>AudioBridge <span>— GUI</span></h1>
         </div>
       </div>
-      <div id="statusPill" class="status-pill is-starting" aria-live="polite">
-        <i></i><span>Starting</span>
+      <div class="topbar-actions">
+        <div class="language-switch" aria-label="Language">
+          <button type="button" data-language="ru">RU</button>
+          <button type="button" data-language="en">EN</button>
+        </div>
+        <div id="statusPill" class="status-pill is-starting" aria-live="polite">
+          <i></i><span>Starting</span>
+        </div>
       </div>
     </header>
 
     <nav class="tabs" aria-label="Main navigation">
-      <button class="tab is-active" data-view="devices" aria-selected="true">Devices</button>
-      <button class="tab" data-view="saved" aria-selected="false">Saved devices</button>
-      <button class="tab" data-view="settings" aria-selected="false">Settings</button>
+      <button class="tab is-active" data-view="devices" data-i18n="tabDevices" aria-selected="true">Devices</button>
+      <button class="tab" data-view="saved" data-i18n="tabSaved" aria-selected="false">Saved devices</button>
+      <button class="tab" data-view="settings" data-i18n="tabSettings" aria-selected="false">Settings</button>
     </nav>
 
     <main>
       <section id="devicesView" class="view is-active" aria-labelledby="devicesTitle">
         <div class="hero-card">
-          <div>
-            <p class="eyebrow">Wireless audio</p>
-            <h2 id="devicesTitle">Choose where your PS5 should play</h2>
+          <div class="hero-content">
+            <p class="eyebrow" data-i18n="wirelessAudio">Wireless audio</p>
+            <h2 id="devicesTitle" data-i18n="heroTitle">Choose where your PS5 should play</h2>
             <p id="statusMessage" class="hero-copy">Preparing the Bluetooth controller…</p>
           </div>
-          <button id="scanButton" class="primary action-button">
-            <span class="button-icon" aria-hidden="true">⌁</span>
-            <span>Scan</span>
-          </button>
+          <div class="hero-action">
+            <div class="signal-visual" aria-hidden="true">
+              <i class="signal-ring ring-one"></i>
+              <i class="signal-ring ring-two"></i>
+              <i class="signal-ring ring-three"></i>
+              <span class="bluetooth-core">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M7 6.5 17 17l-5 5V2l5 5L7 17.5"/>
+                </svg>
+              </span>
+            </div>
+            <button id="scanButton" class="primary action-button">
+              <span class="button-icon" aria-hidden="true">⌁</span>
+              <span data-i18n="scan">Scan</span>
+            </button>
+          </div>
         </div>
 
         <div id="activeCard" class="active-card is-hidden" aria-live="polite"></div>
 
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Nearby</p>
-            <h3>Bluetooth devices</h3>
+            <p class="eyebrow" data-i18n="nearby">Nearby</p>
+            <h3 data-i18n="bluetoothDevices">Bluetooth devices</h3>
           </div>
           <span id="deviceCount" class="count">0 found</span>
         </div>
         <div id="deviceList" class="device-grid" aria-live="polite"></div>
         <div id="deviceEmpty" class="empty-state">
           <div class="radar" aria-hidden="true"><i></i></div>
-          <h3>No devices yet</h3>
-          <p>Put your headphones in pairing mode, then choose Scan.</p>
+          <h3 data-i18n="noDevices">No devices yet</h3>
+          <p data-i18n="noDevicesHint">Put your headphones in pairing mode, then choose Scan.</p>
         </div>
       </section>
 
       <section id="savedView" class="view" aria-labelledby="savedTitle">
         <div class="section-heading large">
           <div>
-            <p class="eyebrow">Quick reconnect</p>
-            <h2 id="savedTitle">Saved devices</h2>
+            <p class="eyebrow" data-i18n="quickReconnect">Quick reconnect</p>
+            <h2 id="savedTitle" data-i18n="savedDevices">Saved devices</h2>
           </div>
         </div>
         <div id="savedList" class="device-grid"></div>
         <div id="savedEmpty" class="empty-state">
           <div class="saved-icon" aria-hidden="true">◇</div>
-          <h3>No saved headphones</h3>
-          <p>A device appears here after its first successful pairing.</p>
+          <h3 data-i18n="noSaved">No saved headphones</h3>
+          <p data-i18n="noSavedHint">A device appears here after its first successful pairing.</p>
         </div>
       </section>
 
       <section id="settingsView" class="view" aria-labelledby="settingsTitle">
         <div class="section-heading large">
           <div>
-            <p class="eyebrow">Preferences</p>
-            <h2 id="settingsTitle">Settings</h2>
+            <p class="eyebrow" data-i18n="preferences">Preferences</p>
+            <h2 id="settingsTitle" data-i18n="settings">Settings</h2>
           </div>
         </div>
         <div class="settings-grid">
           <article class="setting-card">
-            <div><h3>Automatic updates</h3><p>Refresh connection state in the background.</p></div>
+            <div><h3 data-i18n="automaticUpdates">Automatic updates</h3><p data-i18n="automaticUpdatesHint">Refresh connection state in the background.</p></div>
             <button id="updatesToggle" class="switch is-on" role="switch" aria-checked="true"><span></span></button>
           </article>
           <article class="setting-card">
-            <div><h3>Reduce motion</h3><p>Turn off decorative interface animation.</p></div>
+            <div><h3 data-i18n="reduceMotion">Reduce motion</h3><p data-i18n="reduceMotionHint">Turn off decorative interface animation.</p></div>
             <button id="motionToggle" class="switch" role="switch" aria-checked="false"><span></span></button>
           </article>
           <article class="setting-card info-card">
-            <div><h3>Native backend</h3><p id="backendAddress">Local API</p></div>
+            <div><h3 data-i18n="nativeBackend">Native backend</h3><p id="backendAddress">Local API</p></div>
             <span id="controllerState" class="mini-status">Starting</span>
           </article>
           <article class="setting-card info-card">
-            <div><h3>Release</h3><p>Web GUI architecture</p></div>
+            <div><h3 data-i18n="release">Release</h3><p>AudioBridge Web GUI</p></div>
             <span class="version">0.2.0</span>
           </article>
         </div>
@@ -107,12 +125,12 @@
     </main>
 
     <footer>
-      <span><kbd>←</kbd><kbd>→</kbd> Navigate</span>
-      <span><kbd>✕</kbd> Select</span>
-      <span>Audio is streamed with A2DP / SBC</span>
+      <span><kbd>←</kbd><kbd>→</kbd> <span data-i18n="navigate">Navigate</span></span>
+      <span><kbd>✕</kbd> <span data-i18n="select">Select</span></span>
+      <span data-i18n="streamFooter">AudioBridge streams with A2DP / SBC</span>
     </footer>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

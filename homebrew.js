@@ -1,8 +1,8 @@
-// websrv extension: expose a tile and open the native backend's Web GUI.
+// websrv extension: expose the AudioBridge tile and open its native Web GUI.
 async function main() {
   return {
-    mainText: "FGG-PlayPods-GUI",
-    secondaryText: "Bluetooth audio · Web GUI",
+    mainText: "AudioBridge — GUI",
+    secondaryText: "PS5 Bluetooth audio · A2DP",
     onclick: async () => {
       await ApiClient.launchApp(window.workingDir + "/eboot.elf");
       const host = window.location.hostname || "127.0.0.1";
@@ -19,7 +19,7 @@ async function main() {
         }
         await new Promise((resolve) => setTimeout(resolve, 250));
       }
-      throw new Error("FGG-PlayPods-GUI backend did not start");
+      throw new Error("AudioBridge backend did not start");
     }
   };
 }

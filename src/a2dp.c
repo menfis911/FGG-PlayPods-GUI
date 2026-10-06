@@ -355,7 +355,7 @@ int a2dp_stream(int capturing)
     log_line("sbc: %zu-byte frames, %d per packet (%d ms)", framelen,
              frames_per_pkt, pkt_frames * 1000 / sc->rate);
 
-    notify("FGG-PlayPods: audio on the headset - switch it off to stop");
+    notify("AudioBridge: audio on the headset - switch it off to stop");
     t0 = last_status = now_ms();
     if (!capturing) silence_t0 = retry_at = t0;     /* nothing to capture yet */
 

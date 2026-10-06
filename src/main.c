@@ -1,4 +1,4 @@
-/* FGG-PlayPods-GUI -- native Bluetooth/A2DP backend with a Web GUI. */
+/* AudioBridge-GUI -- native Bluetooth/A2DP backend with a Web GUI. */
 #include "backend.h"
 #include "http_server.h"
 #include "log.h"
@@ -14,10 +14,11 @@
 
 extern void sceKernelSetProcessName(const char *name);
 
-#ifndef FGG_VERSION
-#define FGG_VERSION "dev"
+#ifndef AUDIOBRIDGE_VERSION
+#define AUDIOBRIDGE_VERSION "dev"
 #endif
 
+/* Kept stable so upgrades retain existing pairing keys and saved devices. */
 #define STATE_DIR  "/data/fgg-playpods-gui"
 #define LOG_PATH   STATE_DIR "/gui-playpods.log"
 #define LOCK_PATH  STATE_DIR "/gui-playpods.lock"
@@ -52,14 +53,14 @@ static void lock_release(void) { unlink(LOCK_PATH); }
 int main(void)
 {
     int result = 1;
-    sceKernelSetProcessName("fgg-playpods-web.elf");
+    sceKernelSetProcessName("audiobridge.elf");
 
     if (!log_open(STATE_DIR, LOG_PATH)) return 1;
     log_line("========================================");
-    log_line("FGG-PlayPods-GUI %s (Web GUI)", FGG_VERSION);
+    log_line("AudioBridge-GUI %s (Web GUI)", AUDIOBRIDGE_VERSION);
 
     if (!lock_take()) {
-        notify("FGG-PlayPods-GUI: already running");
+        notify("AudioBridge-GUI: already running");
         log_line("another backend instance holds the lock");
         log_close();
         return 1;
@@ -73,7 +74,7 @@ int main(void)
         goto out;
     }
 
-    notify("FGG-PlayPods-GUI: Web GUI ready on port %d", HTTP_PORT);
+    notify("AudioBridge-GUI: Web GUI ready on port %d", HTTP_PORT);
     result = http_server_run(HTTP_PORT, &g_running) ? 0 : 1;
     g_running = 0;
     backend_shutdown();

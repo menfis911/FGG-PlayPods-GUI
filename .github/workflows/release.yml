@@ -56,47 +56,47 @@ jobs:
         run: |
           export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
           make
-          file fgg-playpods-gui.elf
+          file audiobridge-gui.elf
 
       - name: Build websrv Homebrew package
         run: |
-          PACKAGE="FGG-PlayPods-GUI-websrv-${RELEASE_TAG}.zip"
-          mkdir -p package/FGG-PlayPods-GUI/sce_sys
-          cp fgg-playpods-gui.elf package/FGG-PlayPods-GUI/eboot.elf
-          cp homebrew.js package/FGG-PlayPods-GUI/homebrew.js
-          cp sce_sys/icon0.png package/FGG-PlayPods-GUI/sce_sys/icon0.png
-          (cd package && zip -qr "../$PACKAGE" FGG-PlayPods-GUI)
+          PACKAGE="AudioBridge-GUI-websrv-${RELEASE_TAG}.zip"
+          mkdir -p package/AudioBridge-GUI/sce_sys
+          cp audiobridge-gui.elf package/AudioBridge-GUI/eboot.elf
+          cp homebrew.js package/AudioBridge-GUI/homebrew.js
+          cp sce_sys/icon0.png package/AudioBridge-GUI/sce_sys/icon0.png
+          (cd package && zip -qr "../$PACKAGE" AudioBridge-GUI)
           unzip -t "$PACKAGE"
 
-          SHA=$(sha256sum fgg-playpods-gui.elf | cut -d' ' -f1)
-          cat > fgg-playpods-gui.elf.json <<META
+          SHA=$(sha256sum audiobridge-gui.elf | cut -d' ' -f1)
+          cat > audiobridge-gui.elf.json <<META
           {
-            "name": "FGG-PlayPods-GUI",
-            "filename": "fgg-playpods-gui.elf",
-            "description": "Web GUI and native Bluetooth/A2DP backend for PS5.",
+            "name": "AudioBridge-GUI",
+            "filename": "audiobridge-gui.elf",
+            "description": "PS5 Bluetooth A2DP Web GUI based on FGG-PlayPods by FathiGhanem.",
             "version": "$RELEASE_TAG",
             "checksum": "$SHA",
             "category": "Audio",
             "source": "https://github.com/$GITHUB_REPOSITORY"
           }
           META
-          sha256sum fgg-playpods-gui.elf "$PACKAGE" > SHA256SUMS
+          sha256sum audiobridge-gui.elf "$PACKAGE" > SHA256SUMS
 
       - name: Publish immutable release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          name: FGG-PlayPods-GUI — ${{ env.RELEASE_TAG }}
+          name: AudioBridge — GUI — ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            fgg-playpods-gui.elf
-            fgg-playpods-gui.elf.json
+            audiobridge-gui.elf
+            audiobridge-gui.elf.json
             SHA256SUMS
-            FGG-PlayPods-GUI-websrv-*.zip
+            AudioBridge-GUI-websrv-*.zip
           body: |
             ## Web GUI release
 
-            Install `FGG-PlayPods-GUI` from the WebSrv ZIP into `/data/homebrew/`.
+            Install `AudioBridge-GUI` from the WebSrv ZIP into `/data/homebrew/`.
             The package contains the native Bluetooth/A2DP backend, the websrv tile
             extension, and the icon. The Web GUI is embedded into `eboot.elf`.

@@ -726,7 +726,7 @@ static int setup_controller(void)
     hci_sync(OP_WRITE_CLASS_OF_DEV, cod, 3);
 
     memset(name, 0, sizeof name);
-    memcpy(name, "FGG-PlayPods-GUI", 16);
+    memcpy(name, "AudioBridge-GUI", 15);
     hci_sync(OP_WRITE_LOCAL_NAME, name, (int)sizeof name);
 
     /* Page scan on, inquiry scan off: a paired headset reconnects to its
@@ -792,7 +792,7 @@ static int find_headset(void)
         return 1;
     }
 
-    notify("FGG-PlayPods: searching - put the headset in pairing mode");
+    notify("AudioBridge: searching - put the headset in pairing mode");
     log_line("searching for a headset in pairing mode");
     g_found = 0;
     g_inq_done = 0;
@@ -893,7 +893,7 @@ int bt_connect(const char *key_path)
     put16(p + 10, g_target_clock);
     p[12] = 1;                      /* allow role switch */
 
-    notify("FGG-PlayPods: connecting to the headset");
+    notify("AudioBridge: connecting to the headset");
     g_conn_done = 0;
 
     /* A paired headset that is switched on reconnects by itself; give it a
@@ -917,7 +917,7 @@ int bt_connect(const char *key_path)
             if (!bt_wait(&g_conn_done, 10000)) {
                 log_line("connection: the headset is still linked from an "
                          "earlier session");
-                notify("FGG-PlayPods: turn the headset off and on, then try again");
+                notify("AudioBridge: turn the headset off and on, then try again");
                 return 0;
             }
         }
