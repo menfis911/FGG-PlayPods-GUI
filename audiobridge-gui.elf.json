@@ -1,6 +1,6 @@
 {
   "name": "AudioBridge-GUI",
-  "description": "PS5 Bluetooth A2DP Web GUI based on FGG-PlayPods by FathiGhanem.",
-  "version": "0.2.0",
+  "description": "PS5 Bluetooth audio device A2DP/SBC Web GUI based on FGG-PlayPods by FathiGhanem.",
+  "version": "0.3.0",
   "category": "Audio"
 }

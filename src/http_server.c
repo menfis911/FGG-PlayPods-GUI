@@ -125,6 +125,24 @@ static void api_status(int fd)
                    state.status == BACKEND_STREAMING ? "true" : "false",
                    state.device_count);
     used = append_json_string(body, sizeof body, used, state.error);
+    used = appendf(body, sizeof body, used,
+                   ",\"audioProfile\":\"%s\",\"latency\":{"
+                   "\"streaming\":%s,\"sampleRate\":%d,\"bitpool\":%d,"
+                   "\"sbcFramesPerPacket\":%d,\"packetDurationUs\":%d,"
+                   "\"queueMs\":%d,\"maxQueueMs\":%d,"
+                   "\"targetMaxQueueMs\":%d,\"targetKeepQueueMs\":%d,"
+                   "\"packets\":%ld,\"captureRecords\":%ld,"
+                   "\"trimmedFrames\":%ld,\"captureOverruns\":%ld,"
+                   "\"captureRestarts\":%d}",
+                   a2dp_profile_name(state.audio.profile),
+                   state.audio.streaming ? "true" : "false",
+                   state.audio.sample_rate, state.audio.bitpool,
+                   state.audio.sbc_frames_per_packet,
+                   state.audio.packet_duration_us, state.audio.queue_ms,
+                   state.audio.max_queue_ms, state.audio.target_max_queue_ms,
+                   state.audio.target_keep_queue_ms, state.audio.packets,
+                   state.audio.capture_records, state.audio.trimmed_frames,
+                   state.audio.capture_overruns, state.audio.capture_restarts);
     used = appendf(body, sizeof body, used, ",\"active\":");
     if (state.active_valid)
         used = append_device(body, sizeof body, used, &state.active,
@@ -186,6 +204,22 @@ static int json_mac(const char *body, char mac[18])
     return 1;
 }
 
+static int json_profile(const char *body, char profile[16])
+{
+    const char *p = strstr(body, "\"profile\"");
+    const char *q;
+    size_t length;
+    if (!p || !(p = strchr(p, ':'))) return 0;
+    p++;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p++ != '"' || !(q = strchr(p, '"'))) return 0;
+    length = (size_t)(q - p);
+    if (length == 0 || length >= 16) return 0;
+    memcpy(profile, p, length);
+    profile[length] = '\0';
+    return 1;
+}
+
 static void handle_request(int fd, char *request)
 {
     char method[8], path[256];
@@ -208,6 +242,17 @@ static void handle_request(int fd, char *request)
         api_devices(fd);
     } else if (strcmp(method, "GET") == 0 && strcmp(path, "/api/saved") == 0) {
         api_saved(fd);
+    } else if (strcmp(method, "GET") == 0 &&
+               strcmp(path, "/api/audio-profile") == 0) {
+        backend_snapshot state;
+        char profile_body[160];
+        int n;
+        backend_get_snapshot(&state);
+        n = snprintf(profile_body, sizeof profile_body,
+                     "{\"profile\":\"%s\",\"options\":[\"stable\",\"low_latency\"]}",
+                     a2dp_profile_name(state.audio.profile));
+        respond(fd, 200, "OK", "application/json; charset=utf-8",
+                profile_body, (size_t)n);
     } else if (strcmp(method, "POST") == 0 && strcmp(path, "/api/scan") == 0) {
         int ok = backend_request_scan();
         json_message(fd, ok ? 202 : 409, ok ? "Accepted" : "Conflict", ok,
@@ -221,6 +266,13 @@ static void handle_request(int fd, char *request)
         int ok = backend_request_disconnect();
         json_message(fd, ok ? 202 : 409, ok ? "Accepted" : "Conflict", ok,
                      ok ? "Disconnect requested" : "No active connection");
+    } else if (strcmp(method, "POST") == 0 &&
+               strcmp(path, "/api/audio-profile") == 0) {
+        char profile[16];
+        int ok = json_profile(body, profile) && backend_set_audio_profile(profile);
+        json_message(fd, ok ? 200 : 409, ok ? "OK" : "Conflict", ok,
+                     ok ? "Audio profile updated" :
+                          "Profile is invalid or streaming is active");
     } else if (strcmp(method, "GET") == 0 && web_asset_find(path, &asset)) {
         respond(fd, 200, "OK", asset.content_type, asset.data, asset.size);
     } else {

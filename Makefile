@@ -15,6 +15,7 @@ else
 endif
 
 ELF   := audiobridge-gui.elf
+UNINSTALLER := audiobridge-uninstall.elf
 BUILD := build
 VERSION := $(shell cat VERSION)
 WEB_ASSETS := $(BUILD)/generated/web_assets.c
@@ -22,21 +23,24 @@ WEB_ASSETS := $(BUILD)/generated/web_assets.c
 CFLAGS     := -std=c11 -Wall -Wextra -Werror -O2 -Isrc -Ithird_party/sbc \
               -DAUDIOBRIDGE_VERSION='"$(VERSION)"'
 LDFLAGS    := -L$(PS5_PAYLOAD_SDK)/target/lib
-LDLIBS     := -lpthread
+LDLIBS     := -lpthread -lSceIpmi -lSceAppInstUtil
 # Vendored code is built as upstream wrote it, without this project's
 # warning policy.
 SBC_CFLAGS := -std=gnu11 -O2 -w -Ithird_party/sbc
 
 SRCS     := src/main.c src/backend.c src/http_server.c src/capture.c src/hci.c \
-            src/bt.c src/sdp.c src/a2dp.c src/log.c $(WEB_ASSETS)
+            src/bt.c src/sdp.c src/a2dp.c src/log.c src/tile.c $(WEB_ASSETS)
 SBC_SRCS := third_party/sbc/sbc.c third_party/sbc/sbc_primitives.c
 OBJS     := $(patsubst %.c,$(BUILD)/%.o,$(SRCS) $(SBC_SRCS))
 
-.PHONY: all clean test check preview deploy
+.PHONY: all clean test check preview deploy package-test
 
-all: $(ELF)
+all: $(ELF) $(UNINSTALLER)
 
 $(ELF): $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+$(UNINSTALLER): $(BUILD)/src/uninstaller.o $(BUILD)/src/tile.o $(BUILD)/src/log.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(WEB_ASSETS): web/index.html web/styles.css web/app.js tools/embed_assets.py
@@ -49,6 +53,8 @@ $(BUILD)/third_party/%.o: third_party/%.c
 $(BUILD)/src/%.o: src/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(BUILD)/src/tile.o: tile/sce_sys/param.json sce_sys/icon0.png
 
 $(BUILD)/$(BUILD)/generated/%.o: $(BUILD)/generated/%.c
 	@mkdir -p $(dir $@)
@@ -67,5 +73,8 @@ preview:
 deploy: $(ELF)
 	$(PS5_DEPLOY) -h $(PS5_HOST) -p $(PS5_PORT) $^
 
+package-test: all
+	python3 tools/package_test_bundle.py .
+
 clean:
-	rm -rf $(BUILD) $(ELF)
+	rm -rf $(BUILD) $(ELF) $(UNINSTALLER)

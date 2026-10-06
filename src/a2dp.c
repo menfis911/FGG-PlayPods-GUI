@@ -5,6 +5,7 @@
 #include "sbc.h"
 #include "util.h"
 
+#include <pthread.h>
 #include <string.h>
 #include <sys/types.h>
 
@@ -24,18 +25,107 @@
 #define RTP_HEADER      13      /* RTP header and the SBC frame count */
 #define MAX_BITPOOL     53      /* the usual "high quality" SBC setting */
 
-/* The queue between capture and encoder, and how late it may run: more
- * than MAX_LAG_MS behind (a radio stall, or clock drift) and the oldest
- * audio is dropped down to KEEP_LAG_MS, so sound stays in time with the
- * picture. */
+/* The queue between capture and encoder. Each profile supplies a maximum
+ * delay and a smaller target retained after a radio stall or clock drift. */
 #define FIFO_FRAMES     (CAPTURE_RATE / 2)
-#define MAX_LAG_MS      250
-#define KEEP_LAG_MS     80
+#define STABLE_MAX_LAG_MS      250
+#define STABLE_KEEP_LAG_MS     80
+#define LOW_LATENCY_MAX_LAG_MS 80
+#define LOW_LATENCY_KEEP_LAG_MS 24
+#define LOW_LATENCY_SBC_FRAMES 2
 
 #define RETRY_MS        500     /* capture restart attempts */
 #define STATUS_MS       5000    /* status line interval */
+#define METRICS_MS      250     /* API diagnostics refresh interval */
 
 static volatile int g_stop_requested;
+static pthread_mutex_t g_metrics_lock = PTHREAD_MUTEX_INITIALIZER;
+static a2dp_metrics g_metrics;
+
+static void profile_limits(a2dp_profile profile, int *max_lag_ms,
+                           int *keep_lag_ms)
+{
+    if (profile == A2DP_PROFILE_LOW_LATENCY) {
+        *max_lag_ms = LOW_LATENCY_MAX_LAG_MS;
+        *keep_lag_ms = LOW_LATENCY_KEEP_LAG_MS;
+    } else {
+        *max_lag_ms = STABLE_MAX_LAG_MS;
+        *keep_lag_ms = STABLE_KEEP_LAG_MS;
+    }
+}
+
+void a2dp_set_profile(a2dp_profile profile)
+{
+    int max_lag_ms, keep_lag_ms;
+    if (profile != A2DP_PROFILE_LOW_LATENCY) profile = A2DP_PROFILE_STABLE;
+    profile_limits(profile, &max_lag_ms, &keep_lag_ms);
+    pthread_mutex_lock(&g_metrics_lock);
+    g_metrics.profile = profile;
+    g_metrics.target_max_queue_ms = max_lag_ms;
+    g_metrics.target_keep_queue_ms = keep_lag_ms;
+    pthread_mutex_unlock(&g_metrics_lock);
+}
+
+a2dp_profile a2dp_get_profile(void)
+{
+    a2dp_profile profile;
+    pthread_mutex_lock(&g_metrics_lock);
+    profile = g_metrics.profile;
+    pthread_mutex_unlock(&g_metrics_lock);
+    return profile;
+}
+
+const char *a2dp_profile_name(a2dp_profile profile)
+{
+    return profile == A2DP_PROFILE_LOW_LATENCY ? "low_latency" : "stable";
+}
+
+void a2dp_get_metrics(a2dp_metrics *out)
+{
+    pthread_mutex_lock(&g_metrics_lock);
+    *out = g_metrics;
+    pthread_mutex_unlock(&g_metrics_lock);
+}
+
+static void metrics_start(a2dp_profile profile, int rate, int bitpool,
+                          int frames_per_packet, int packet_duration_us)
+{
+    int max_lag_ms, keep_lag_ms;
+    profile_limits(profile, &max_lag_ms, &keep_lag_ms);
+    pthread_mutex_lock(&g_metrics_lock);
+    memset(&g_metrics, 0, sizeof g_metrics);
+    g_metrics.profile = profile;
+    g_metrics.streaming = 1;
+    g_metrics.sample_rate = rate;
+    g_metrics.bitpool = bitpool;
+    g_metrics.sbc_frames_per_packet = frames_per_packet;
+    g_metrics.packet_duration_us = packet_duration_us;
+    g_metrics.target_max_queue_ms = max_lag_ms;
+    g_metrics.target_keep_queue_ms = keep_lag_ms;
+    pthread_mutex_unlock(&g_metrics_lock);
+}
+
+static void metrics_update(int queue_ms, int max_queue_ms, long packets,
+                           long records, long trimmed, int restarts)
+{
+    pthread_mutex_lock(&g_metrics_lock);
+    g_metrics.queue_ms = queue_ms;
+    g_metrics.max_queue_ms = max_queue_ms;
+    g_metrics.packets = packets;
+    g_metrics.capture_records = records;
+    g_metrics.trimmed_frames = trimmed;
+    g_metrics.capture_overruns = capture_overruns();
+    g_metrics.capture_restarts = restarts;
+    pthread_mutex_unlock(&g_metrics_lock);
+}
+
+static void metrics_stop(void)
+{
+    pthread_mutex_lock(&g_metrics_lock);
+    g_metrics.streaming = 0;
+    g_metrics.queue_ms = 0;
+    pthread_mutex_unlock(&g_metrics_lock);
+}
 
 void a2dp_request_stop(void) { g_stop_requested = 1; }
 void a2dp_clear_stop(void)   { g_stop_requested = 0; }
@@ -158,7 +248,7 @@ static int find_sbc_sink(void)
             j += 2 + clen;
         }
     }
-    log_line("avdtp: the headset has no SBC sink");
+    log_line("avdtp: the Bluetooth audio device has no SBC sink");
     return 0;
 }
 
@@ -173,11 +263,11 @@ static int choose_sbc(sbc_choice *ch)
 
     if (c[0] & 0x10)      { ch->rate = 48000; ch->cfg[0] |= 0x10; ch->sbc_freq = SBC_FREQ_48000; }
     else if (c[0] & 0x20) { ch->rate = 44100; ch->cfg[0] |= 0x20; ch->sbc_freq = SBC_FREQ_44100; }
-    else { log_line("sbc: the headset takes neither 44.1 nor 48 kHz"); return 0; }
+    else { log_line("sbc: the audio device takes neither 44.1 nor 48 kHz"); return 0; }
 
     if (c[0] & 0x01)      { ch->cfg[0] |= 0x01; ch->sbc_mode = SBC_MODE_JOINT_STEREO; }
     else if (c[0] & 0x02) { ch->cfg[0] |= 0x02; ch->sbc_mode = SBC_MODE_STEREO; }
-    else { log_line("sbc: the headset takes no stereo mode"); return 0; }
+    else { log_line("sbc: the audio device takes no stereo mode"); return 0; }
 
     if (c[1] & 0x10)      { ch->cfg[1] |= 0x10; ch->sbc_blocks = SBC_BLK_16; }
     else if (c[1] & 0x20) { ch->cfg[1] |= 0x20; ch->sbc_blocks = SBC_BLK_12; }
@@ -278,7 +368,7 @@ static void fifo_take(int frames)
 }
 
 /* Queues captured 48 kHz float frames at `rate`: a straight conversion when
- * the headset runs at 48 kHz, linear interpolation otherwise. */
+ * the audio device runs at 48 kHz, linear interpolation otherwise. */
 static void queue_capture(const float *in, int frames, int rate)
 {
     double step = (double)CAPTURE_RATE / rate;
@@ -303,7 +393,7 @@ static void queue_capture(const float *in, int frames, int rate)
 }
 
 /* SBC frames of `framelen` bytes that fit one media packet, bounded by the
- * headset's L2CAP MTU and the controller's ACL buffer. */
+ * audio device's L2CAP MTU and the controller's ACL buffer. */
 static int frames_that_fit(size_t framelen)
 {
     int room = (int)g_media.remote_mtu, n;
@@ -319,16 +409,22 @@ int a2dp_stream(int capturing)
 {
     static float rec[CAPTURE_RECORD / sizeof(float)];
     const sbc_choice *sc = &g_sc;
+    a2dp_profile profile = a2dp_get_profile();
     sbc_t sbc;
     size_t codesize, framelen;
     int frames_per_pkt, samples_per_frame, pkt_frames, pkts = 0, records = 0;
     int restarts = 0;
     long t0, last_status, sent_samples = 0, trimmed = 0;
+    long last_metrics, max_queue_frames = 0;
     long retry_at = 0, silence_t0 = 0, silent = 0;
-    long max_lag = (long)sc->rate * MAX_LAG_MS / 1000;
-    long keep_lag = (long)sc->rate * KEEP_LAG_MS / 1000;
+    int max_lag_ms, keep_lag_ms;
+    long max_lag, keep_lag;
     uint16_t seq = 1;
     unsigned char pkt[1024];
+
+    profile_limits(profile, &max_lag_ms, &keep_lag_ms);
+    max_lag = (long)sc->rate * max_lag_ms / 1000;
+    keep_lag = (long)sc->rate * keep_lag_ms / 1000;
 
     if (sbc_init(&sbc, 0) != 0) {
         log_line("sbc: init failed");
@@ -346,20 +442,28 @@ int a2dp_stream(int capturing)
     framelen = sbc_get_frame_length(&sbc);
     samples_per_frame = (int)(codesize / 4);
     frames_per_pkt = frames_that_fit(framelen);
+    if (profile == A2DP_PROFILE_LOW_LATENCY &&
+        frames_per_pkt > LOW_LATENCY_SBC_FRAMES)
+        frames_per_pkt = LOW_LATENCY_SBC_FRAMES;
     if (frames_per_pkt < 1) {
         log_line("sbc: a %zu-byte frame does not fit a packet", framelen);
         sbc_finish(&sbc);
         return 0;
     }
     pkt_frames = frames_per_pkt * samples_per_frame;
-    log_line("sbc: %zu-byte frames, %d per packet (%d ms)", framelen,
-             frames_per_pkt, pkt_frames * 1000 / sc->rate);
+    metrics_start(profile, sc->rate, sc->bitpool, frames_per_pkt,
+                  pkt_frames * 1000000 / sc->rate);
+    log_line("latency: profile %s, SBC frame %d us, %d frames per RTP packet, "
+             "packet %d us, queue trim %d -> %d ms, bitpool %d",
+             a2dp_profile_name(profile), samples_per_frame * 1000000 / sc->rate,
+             frames_per_pkt, pkt_frames * 1000000 / sc->rate,
+             max_lag_ms, keep_lag_ms, sc->bitpool);
 
-    notify("AudioBridge: audio on the headset - switch it off to stop");
-    t0 = last_status = now_ms();
+    notify("AudioBridge: audio is playing on the Bluetooth audio device");
+    t0 = last_status = last_metrics = now_ms();
     if (!capturing) silence_t0 = retry_at = t0;     /* nothing to capture yet */
 
-    /* Runs until the headset goes away or the Web API requests disconnect. */
+    /* Runs until the audio device goes away or the Web API requests disconnect. */
     while (!bt_link_lost() && !g_media.closed && !g_stop_requested) {
         int n = 0, sent_one = 0;
 
@@ -397,6 +501,7 @@ int a2dp_stream(int capturing)
             trimmed += g_fifo_len - keep_lag;
             fifo_take(g_fifo_len - (int)keep_lag);
         }
+        if (g_fifo_len > max_queue_frames) max_queue_frames = g_fifo_len;
 
         while (g_fifo_len >= pkt_frames && bt_can_send()) {
             unsigned char *out = pkt + RTP_HEADER;
@@ -415,6 +520,7 @@ int a2dp_stream(int capturing)
                                           codesize, out, framelen, &written);
                 if (used <= 0 || written <= 0) {
                     log_line("sbc: encode failed (%zd, %zd)", used, written);
+                    metrics_stop();
                     sbc_finish(&sbc);
                     return 0;
                 }
@@ -431,11 +537,22 @@ int a2dp_stream(int capturing)
             sent_samples += pkt_frames;
         }
 
+        if (now_ms() - last_metrics >= METRICS_MS) {
+            metrics_update(g_fifo_len * 1000 / sc->rate,
+                           (int)(max_queue_frames * 1000 / sc->rate),
+                           pkts, records, trimmed, restarts);
+            last_metrics = now_ms();
+        }
+
         if (now_ms() - last_status >= STATUS_MS) {
-            log_line("stream: %d packets, %d capture records, queue %d ms, "
-                     "trimmed %ld, overruns %ld, restarts %d, %s, credits %d, "
-                     "completions assumed %ld, reports missing %ld", pkts, records,
-                     g_fifo_len * 1000 / sc->rate, trimmed, capture_overruns(),
+            log_line("stream: profile %s, %d packets, packet %d us, "
+                     "%d capture records, queue %d ms (max %ld ms), "
+                     "trimmed %ld frames, overruns %ld, restarts %d, %s, credits %d, "
+                     "completions assumed %ld, reports missing %ld",
+                     a2dp_profile_name(profile), pkts,
+                     pkt_frames * 1000000 / sc->rate, records,
+                     g_fifo_len * 1000 / sc->rate,
+                     max_queue_frames * 1000 / sc->rate, trimmed, capture_overruns(),
                      restarts, capturing ? "capturing" : "waiting for audio",
                      bt_credits(), bt_completions_assumed(), bt_reports_missing());
             last_status = now_ms();
@@ -445,6 +562,10 @@ int a2dp_stream(int capturing)
     }
 
 done:
+    metrics_update(g_fifo_len * 1000 / sc->rate,
+                   (int)(max_queue_frames * 1000 / sc->rate),
+                   pkts, records, trimmed, restarts);
+    metrics_stop();
     log_line("stream: ended after %ld s, %d packets, %d capture records, "
              "trimmed %ld", (now_ms() - t0) / 1000, pkts, records, trimmed);
     sbc_finish(&sbc);

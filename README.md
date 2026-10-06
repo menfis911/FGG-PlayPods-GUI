@@ -5,136 +5,184 @@
 <h1 align="center">AudioBridge — GUI</h1>
 
 <p align="center">
-  <strong>Web GUI для передачи всего звука PS5 на обычные Bluetooth-наушники.</strong><br>
-  Без USB-донгла, через Bluetooth-контроллер консоли, с сохранением беспроводного DualSense.
+  <strong>Выберите, где должна звучать ваша PS5</strong><br>
+  Передача звука PS5 на совместимое Bluetooth-аудиоустройство без USB-донгла.
 </p>
 
 | | |
 |---|---|
 | **Основа** | [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods) от [FathiGhanem](https://github.com/FathiGhanem) |
-| **Идея AudioBridge** | заменить автоматическое подключение к первому устройству на управляемое приложение с Web GUI |
-| **Как работает** | native backend захватывает звук PS5 и передаёт его через SBC/A2DP; Web GUI управляет backend через JSON API |
-| **Что добавлено** | scan, список устройств, RSSI, выбор по MAC, pairing, connect/disconnect, saved devices, статус streaming и websrv-плитка |
-| **Версия** | `0.2.0` |
+| **Транспорт** | Classic Bluetooth A2DP sink с обязательным codec SBC |
+| **Устройства** | наушники, гарнитуры в режиме A2DP, колонки, саундбары, ресиверы и адаптеры |
+| **Управление** | встроенный RU/EN Web GUI и additive JSON API |
+| **Запуск** | один payload через elfldr, обычно порт `9021` |
+| **Версия** | `0.3.0` |
 
-AudioBridge — самостоятельное продолжение и производная работа на базе FGG-PlayPods. Проверенная Bluetooth/audio-реализация сохранена, а приложение получило новую архитектуру: асинхронный backend, неблокирующий HTTP API и интерфейс для телевизора вместо собственного полноэкранного VideoOut GUI.
+AudioBridge — самостоятельное продолжение и производная работа на базе FGG-PlayPods. Проверенная реализация захвата звука, Bluetooth, AVDTP, A2DP и SBC сохранена. Проект добавляет асинхронный backend, выбор устройства, HTTP API, Web GUI, измеримую диагностику задержки и собственную постоянную плитку PS5.
 
-## Происхождение проекта
+## Происхождение и атрибуция
 
-AudioBridge вырос из [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods), созданного [FathiGhanem](https://github.com/FathiGhanem) и опубликованного FGG Store. Автор исходного проекта реализовал наиболее сложную часть: исследовал аудиозахват PS5 и работу её Bluetooth-контроллера, написал A2DP source, SSP pairing, L2CAP, SDP, AVDTP и интеграцию SBC.
+[FathiGhanem](https://github.com/FathiGhanem) реализовал в [FGG-PlayPods](https://github.com/FGGstore/FGG-PlayPods) наиболее сложную основу: захват звука PS5, работу общего Bluetooth-контроллера без отключения DualSense, pairing/SSP, HCI, L2CAP, SDP, AVDTP, SBC и A2DP source. AudioBridge сохраняет происхождение, историю и лицензию этой работы.
 
-На этой базе AudioBridge добавляет собственную архитектуру приложения:
-
-- асинхронный backend с управляемым состоянием;
-- JSON HTTP API;
-- выбор конкретного Bluetooth-устройства вместо автоматического подключения к первому найденному;
-- Web GUI и интеграцию с `ps5-payload-dev/websrv`;
-- список найденных и сохранённых устройств;
-- неблокирующие scan, connect и disconnect;
-- TV-friendly навигацию с хорошо видимым focus;
-- отдельную систему сборки и websrv release-пакет.
-
-Отдельная благодарность **FathiGhanem** за оригинальный порт и инженерную работу, на которой основан AudioBridge. Также спасибо проекту [ps5-payload-dev](https://github.com/ps5-payload-dev) за SDK и websrv, а BlueZ — за SBC codec. История происхождения и лицензии сохранены намеренно.
+Installer плитки основан на проверенном `sceAppInstUtil` подходе официального [ps5-payload-dev/tv4play](https://github.com/ps5-payload-dev/tv4play). Прямой `deeplinkUri` соответствует launcher metadata официального [ps5-payload-dev/websrv](https://github.com/ps5-payload-dev/websrv). Vendored SBC codec происходит из BlueZ.
 
 ## Архитектура
 
 ```text
-websrv Homebrew tile
-        │ запускает eboot.elf
-        │ открывает http://<hostname-websrv>:18195/
-        ▼
-HTML / CSS / JavaScript ── HTTP JSON API ── native backend worker
-                                                 │
-                          capture ── SBC ── A2DP ─┴─ Bluetooth headset
+elfldr :9021 ── запускает audiobridge-gui.elf
+                         │
+                         ├─ устанавливает/обновляет плитку ABRG18195
+                         ├─ Bluetooth/A2DP backend worker
+                         └─ HTTP server 0.0.0.0:18195
+                                      │
+        PS5 tile ── http://127.0.0.1:18195/
+ external browser ── http://<IP-PS5>:18195/
+                                      │
+                         Web GUI / JSON API
+                                      │
+                    capture ── SBC ── RTP/A2DP ── audio device
 ```
 
-- `src/backend.c` — worker и неблокирующее состояние Bluetooth/A2DP;
-- `src/http_server.c` — HTTP-сервер и JSON API на `0.0.0.0:18195`;
-- `web/` — встроенный TV-friendly интерфейс без внешних зависимостей;
-- `src/bt.c`, `src/a2dp.c`, `src/capture.c`, `src/hci.c`, `src/sdp.c` — native Bluetooth/audio-реализация;
-- `homebrew.js` — плитка и запуск приложения из websrv.
+Основной payload не требует Homebrew Launcher и не запускается через `websrv/hbldr`. После перезагрузки плитка остаётся, но долгоживущий backend нужно снова отправить через elfldr. Плитка — Web/Media shortcut, а не автозапуск payload.
 
-Старые `gui.c`, `video.c`, `pad.c` и `ps5_tilemap.inc` не входят в сборку. AudioBridge не открывает VideoOut и не перехватывает экран консоли.
+## Нативная плитка PS5
 
-## Web API
+Параметры плитки находятся в `tile/sce_sys/param.json`:
 
-Backend слушает все IPv4-интерфейсы на порту `18195`. Длительные операции выполняются worker-потоком, поэтому HTTP и Web GUI не блокируются во время scan, pairing, connect или streaming.
+- Title ID: `ABRG18195` (формат 4 заглавные буквы + 5 цифр);
+- `applicationCategoryType`: `65536` (Media app);
+- `deeplinkUri`: `http://127.0.0.1:18195/`;
+- отображаемое имя: `AudioBridge`.
 
-| Метод | Endpoint | Назначение |
-|---|---|---|
-| `GET` | `/api/status` | состояние controller, scan, connection и stream |
-| `GET` | `/api/devices` | найденные устройства: name, MAC, RSSI и state |
-| `POST` | `/api/scan` | поставить discovery в очередь |
-| `POST` | `/api/connect` | подключить устройство; JSON: `{"mac":"AA:BB:CC:DD:EE:FF"}` |
-| `POST` | `/api/disconnect` | остановить stream и отключить устройство |
-| `GET` | `/api/saved` | устройство с сохранённым link key |
+Поиск GitHub на момент выбора ID не нашёл другого `ABRG18195`, однако централизованного реестра homebrew Title ID нет. Installer дополнительно проверяет `/user/app/ABRG18195` и `/user/appmeta/ABRG18195`: существующая запись без ownership marker AudioBridge считается коллизией и никогда не перезаписывается.
 
-Команды принимаются с `202 Accepted`. Если backend занят другой несовместимой операцией, API возвращает `409 Conflict`.
-
-## Интеграция с websrv
-
-Актуальный `websrv` ищет Homebrew в `/data/homebrew`, `/mnt/usb*/homebrew` и `/mnt/ext*/homebrew`. Поддерживаемый формат — папка приложения с `eboot.elf`, `sce_sys/icon0.png` и опциональным `homebrew.js`. Контракт описан в [официальном README websrv](https://github.com/ps5-payload-dev/websrv#installing-homebrew).
-
-Плитка запускает `eboot.elf`, ожидает `/api/status` и открывает Web GUI. Hostname берётся из текущей страницы websrv, поэтому один пакет работает и в PS5 webview, и при открытии websrv по IP консоли с компьютера. Hardcoded IP не используется.
-
-Структура release-пакета:
+При первом запуске payload записывает только:
 
 ```text
-AudioBridge-GUI/
-├── eboot.elf
-├── homebrew.js
+/user/app/ABRG18195/
+├── audiobridge-owner.txt
 └── sce_sys/
+    ├── param.json
     └── icon0.png
 ```
 
-Скопируйте папку `AudioBridge-GUI` в `/data/homebrew/`, запустите websrv и откройте Homebrew Launcher. В интерфейсе появится плитка **AudioBridge — GUI**.
+Регистрация выполняется через `sceAppInstUtilAppInstallTitleDir`, с тем же fallback на `sceAppInstUtilAppInstallAll`, который использует upstream. Обновление атомарно заменяет только собственные файлы и повторно регистрирует title без предварительного удаления. Отдельный `audiobridge-uninstall.elf` вызывает `sceAppInstUtilAppUnInstall` только после проверки ownership marker и затем удаляет только точные известные пути. Каталог данных и pairing keys не удаляются.
 
-## Данные и обновление с FGG-PlayPods-GUI
+### Почему не `webAppUri` из tv4play
 
-Чтобы обновление не удаляло pairing и не требовало повторного сопряжения, AudioBridge сохраняет совместимый каталог предыдущей GUI-версии:
+`tv4play` использует Web Based Media App (`66048`) и `webAppUri`, который через короткий URL перенаправляет на `localhost:8080/fs/...`; статические файлы обслуживает `websrv`. AudioBridge должен работать без `websrv`, поэтому использует прямой `deeplinkUri` на собственный HTTP server — подход, применяемый launcher metadata самого `websrv` и другими self-hosted payload UI.
+
+### Ограничение состояния ожидания
+
+Когда HTTP server уже поднялся, страница сразу открывается и показывает `starting`, `ready` или понятное ожидание backend. Если payload вообще не запущен, на `127.0.0.1:18195` некому отдать HTML: WebKit показывает собственную ошибку соединения. Плитка не может самостоятельно запустить payload после reboot. Формулировка и скорость системной ошибки, положение плитки и обновление metadata зависят от firmware и требуют теста на реальной PS5; бесконечный запуск `hbldr` в этой архитектуре не используется.
+
+## Профили задержки
+
+Рабочая Bluetooth/A2DP реализация и bitpool по умолчанию (`max 53`, ограниченный возможностями sink) не изменены.
+
+| Профиль | RTP packetization | Максимальная очередь | После trim | Назначение |
+|---|---:|---:|---:|---|
+| Stable | максимально допустимое число SBC frames | 250 ms | 80 ms | прежнее безопасное поведение |
+| Low latency | не более 2 SBC frames | 80 ms | 24 ms | меньше программной packet/queue задержки |
+
+Профиль сохраняется в `/data/fgg-playpods-gui/audio-profile.txt` и применяется к следующему stream. Во время подключения или streaming изменение отклоняется, чтобы не перестраивать активный AVDTP поток. Low latency может увеличить чувствительность к radio stalls; он не устраняет аппаратный буфер Bluetooth-аудиоустройства.
+
+Каждые 250 ms для API обновляются:
+
+- текущая и максимальная PCM queue в миллисекундах;
+- длительность RTP-пакета и SBC frames per packet;
+- sample rate и bitpool;
+- packet/capture record counters;
+- trimmed PCM frames, capture overruns и capture restarts.
+
+Каждые 5 секунд те же ключевые значения записываются в лог.
+
+## Web API
+
+Backend слушает все IPv4-интерфейсы на порту `18195`. Длительные операции выполняются worker-потоком, поэтому HTTP не блокируется во время scan, pairing, connect или streaming. Существующие endpoints сохранены; новые поля и endpoint профиля добавлены без удаления старых.
+
+| Метод | Endpoint | Назначение |
+|---|---|---|
+| `GET` | `/api/status` | состояние controller/stream, `audioProfile` и `latency` metrics |
+| `GET` | `/api/devices` | найденные Bluetooth-аудиоустройства |
+| `POST` | `/api/scan` | поставить discovery в очередь |
+| `POST` | `/api/connect` | подключить устройство; `{"mac":"AA:BB:CC:DD:EE:FF"}` |
+| `POST` | `/api/disconnect` | остановить stream и отключить устройство |
+| `GET` | `/api/saved` | устройство с сохранённым link key |
+| `GET` | `/api/audio-profile` | текущий профиль и допустимые значения |
+| `POST` | `/api/audio-profile` | `{"profile":"stable"}` или `{"profile":"low_latency"}` |
+
+Команды scan/connect/disconnect принимаются с `202 Accepted`. Несовместимая параллельная операция возвращает `409 Conflict`. Изменение профиля возвращает `200 OK`, а во время активного потока — `409 Conflict`.
+
+## Совместимые данные
+
+Путь существующей GUI-версии намеренно не переименован и не мигрируется:
 
 ```text
-/data/fgg-playpods-gui/paired.key       # бинарный Bluetooth link key
-/data/fgg-playpods-gui/saved-device.txt # имя и MAC сохранённого устройства
-/data/fgg-playpods-gui/gui-playpods.log # лог текущего запуска
+/data/fgg-playpods-gui/paired.key              # Bluetooth link key
+/data/fgg-playpods-gui/saved-device.txt        # имя сохранённого устройства
+/data/fgg-playpods-gui/gui-playpods.log         # лог текущего запуска
+/data/fgg-playpods-gui/audio-profile.txt        # новый профиль задержки
+/data/fgg-playpods-gui/audiobridge-uninstall.log
 ```
 
-Это внутренний стабильный путь данных, а не отображаемое название продукта. Формат `paired.key` не изменён. Переименование GitHub-репозитория или websrv-папки не влияет на сохранённые Bluetooth-ключи.
+Не запускайте одновременно старый FGG-PlayPods и AudioBridge: оба используют один Bluetooth-контроллер и audio capture path.
 
-## Ограничения
+## Ограничения устройств
 
+- требуется Classic Bluetooth A2DP sink с SBC;
+- поддерживаются наушники, гарнитуры в режиме A2DP, колонки, саундбары, ресиверы и адаптеры;
+- нельзя обещать поддержку «любого Bluetooth-устройства»: LE Audio-only sink не подходит;
+- передаётся звук, микрофон/HFP/HSP не поддерживаются;
 - одно A2DP-устройство одновременно;
-- Classic Bluetooth Audio / SBC; LE Audio-only устройства не поддерживаются;
-- передаётся звук, микрофон не поддерживается;
-- громкость регулируется на гарнитуре;
-- Bluetooth SBC добавляет задержку;
-- payload использует Bluetooth-контроллер совместно с системным драйвером и не отключает DualSense.
+- аппаратная A2DP задержка и буфер устройства остаются;
+- громкость регулируется на Bluetooth-аудиоустройстве.
 
 ## Сборка и проверки
 
 ```sh
 export PS5_PAYLOAD_SDK=/opt/ps5-payload-sdk
 make check
-make
+make clean all
+make package-test
 ```
 
-Результат сборки — `audiobridge-gui.elf`. Web assets встраиваются в ELF, поэтому отдельная папка `web/` на PS5 не требуется.
+Результаты:
 
-Для локального просмотра запускайте страницу через HTTP так же, как её обслуживает backend на PS5:
+```text
+audiobridge-gui.elf
+audiobridge-uninstall.elf
+build/AudioBridge-GUI-v0.3.0-test.zip
+```
+
+Web assets встроены в основной ELF. Для локального просмотра GUI:
 
 ```sh
 make preview
-# открыть http://127.0.0.1:18196/
+# http://127.0.0.1:18196/
 ```
 
-При прямом открытии `web/index.html` через `file://` некоторые встроенные браузеры блокируют локальные CSS/JS subresources. Это ограничение preview-режима, а не PS5-пакета.
+## Release и legacy websrv
 
-Для прямой диагностики отправьте `audiobridge-gui.elf` в `elfldr` и откройте `http://<PS5-IP>:18195/` с другого устройства.
+Теги `v*` собираются GitHub Actions. Workflow проверяет соответствие `v$(cat VERSION)`, отказывается перезаписывать существующий GitHub Release, собирает оба ELF, тестовый ZIP и `SHA256SUMS`.
 
-## Release
+`homebrew.js` и проверка старого `/data/homebrew/AudioBridge-GUI` пакета временно сохранены только как rollback до аппаратного подтверждения плитки `ABRG18195`. Они не являются частью целевой архитектуры. Удалять legacy package из release следует после успешного PS5-теста установки, reboot, deeplink, обновления и uninstall.
 
-Теги `v*` собираются GitHub Actions. Workflow проверяет совпадение тега с `VERSION`, собирает ELF и `AudioBridge-GUI-websrv-<version>.zip`, а затем создаёт только новый GitHub Release. Существующие releases никогда не перезаписываются.
+## Firmware-риски и обязательный тест на PS5
+
+`sceAppInstUtilAppInstallTitleDir` — private/undocumented API, а поведение Media/WebApp metadata может меняться между firmware. До релиза обязательно проверить:
+
+1. установку и положение плитки на нужных firmware;
+2. прямой deeplink `127.0.0.1:18195` и системное состояние при остановленном backend;
+3. повторную отправку payload после reboot без потери плитки и pairing key;
+4. обновление icon/metadata с тем же Title ID;
+5. scan, pairing, reconnect и стабильный звук в обоих профилях;
+6. метрики/лог при radio stalls и отсутствие деградации bitpool;
+7. uninstaller и сохранение `/data/fgg-playpods-gui`.
+
+Точный сценарий находится в `INSTALL-RU.txt`.
+Зафиксированные upstream commits, границы WebApp/Media/BigApp и полный hardware gate находятся в `docs/PS5-NATIVE-TILE.md`.
 
 ## Лицензия
 
-Проект распространяется под GPL-3.0. Vendored SBC codec в `third_party/sbc` сохраняет LGPL-2.1-or-later; подробности находятся в `third_party/sbc/VENDORED.md`.
+Проект распространяется под GPL-3.0. Vendored SBC codec сохраняет LGPL-2.1-or-later; подробности — в `third_party/sbc/VENDORED.md`.

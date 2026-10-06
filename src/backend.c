@@ -27,7 +27,45 @@ static backend_snapshot g_state;
 static bt_device g_connect_device;
 static char g_key_path[256];
 static char g_saved_path[256];
+static char g_profile_path[256];
 static void (*g_tick)(void);
+
+static a2dp_profile load_audio_profile(void)
+{
+    char value[32];
+    FILE *f = fopen(g_profile_path, "rb");
+    if (!f) return A2DP_PROFILE_STABLE;
+    if (!fgets(value, sizeof value, f)) value[0] = '\0';
+    fclose(f);
+    value[strcspn(value, "\r\n")] = '\0';
+    return strcmp(value, "low_latency") == 0 ?
+           A2DP_PROFILE_LOW_LATENCY : A2DP_PROFILE_STABLE;
+}
+
+static int save_audio_profile(a2dp_profile profile)
+{
+    char temporary[288];
+    FILE *f;
+    if (snprintf(temporary, sizeof temporary, "%s.tmp", g_profile_path) >=
+        (int)sizeof temporary) return 0;
+    f = fopen(temporary, "wb");
+    if (!f) {
+        log_line("audio profile: cannot write %s errno=%d", temporary, errno);
+        return 0;
+    }
+    fprintf(f, "%s\n", a2dp_profile_name(profile));
+    if (fclose(f) != 0) {
+        log_line("audio profile: cannot close %s errno=%d", temporary, errno);
+        remove(temporary);
+        return 0;
+    }
+    if (rename(temporary, g_profile_path) != 0) {
+        log_line("audio profile: cannot replace %s errno=%d", g_profile_path, errno);
+        remove(temporary);
+        return 0;
+    }
+    return 1;
+}
 
 static void set_status(backend_status status, const char *error)
 {
@@ -76,7 +114,7 @@ static void load_saved(void)
     saved.valid = 1;
     memcpy(saved.addr, record, 6);
     saved.rssi = -127;
-    snprintf(saved.name, sizeof saved.name, "Saved Bluetooth device");
+    snprintf(saved.name, sizeof saved.name, "Saved Bluetooth audio device");
 
     f = fopen(g_saved_path, "rb");
     if (f) {
@@ -95,7 +133,8 @@ static void save_device(const bt_device *device)
 {
     FILE *f = fopen(g_saved_path, "wb");
     if (f) {
-        fprintf(f, "%s\n", device->name[0] ? device->name : "Saved Bluetooth device");
+        fprintf(f, "%s\n", device->name[0] ? device->name :
+                "Saved Bluetooth audio device");
         fclose(f);
     } else {
         log_line("saved device: cannot write %s errno=%d", g_saved_path, errno);
@@ -256,15 +295,19 @@ static void *worker_main(void *unused)
 }
 
 int backend_init(const char *key_path, const char *saved_path,
+                 const char *profile_path,
                  void (*tick)(void))
 {
     memset(&g_state, 0, sizeof g_state);
     g_state.status = BACKEND_STARTING;
     snprintf(g_key_path, sizeof g_key_path, "%s", key_path);
     snprintf(g_saved_path, sizeof g_saved_path, "%s", saved_path);
+    snprintf(g_profile_path, sizeof g_profile_path, "%s", profile_path);
     g_tick = tick;
     g_shutdown = 0;
     g_command = COMMAND_NONE;
+    a2dp_set_profile(load_audio_profile());
+    log_line("audio profile: %s", a2dp_profile_name(a2dp_get_profile()));
     load_saved();
     if (pthread_create(&g_thread, NULL, worker_main, NULL) != 0) return 0;
     g_thread_started = 1;
@@ -341,11 +384,37 @@ int backend_request_disconnect(void)
     return accepted;
 }
 
+int backend_set_audio_profile(const char *profile)
+{
+    a2dp_profile selected;
+    int accepted = 0;
+
+    if (!profile) return 0;
+    if (strcmp(profile, "stable") == 0) selected = A2DP_PROFILE_STABLE;
+    else if (strcmp(profile, "low_latency") == 0)
+        selected = A2DP_PROFILE_LOW_LATENCY;
+    else return 0;
+
+    pthread_mutex_lock(&g_lock);
+    if (g_command == COMMAND_NONE &&
+        (g_state.status == BACKEND_READY || g_state.status == BACKEND_ERROR))
+        accepted = 1;
+    pthread_mutex_unlock(&g_lock);
+    if (!accepted) return 0;
+    if (!save_audio_profile(selected)) return 0;
+
+    a2dp_set_profile(selected);
+    log_line("audio profile: changed to %s; applies to the next stream",
+             a2dp_profile_name(selected));
+    return 1;
+}
+
 void backend_get_snapshot(backend_snapshot *out)
 {
     pthread_mutex_lock(&g_lock);
     *out = g_state;
     pthread_mutex_unlock(&g_lock);
+    a2dp_get_metrics(&out->audio);
 }
 
 const char *backend_status_name(backend_status status)

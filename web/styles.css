@@ -56,7 +56,7 @@ h3 { margin-bottom: 0; font-size: 27px; letter-spacing: -.025em; }
 .status-pill.is-error i { background: var(--danger); }
 
 .tabs { display: flex; gap: 14px; padding: 28px 0 12px; }
-.tab, .action-button, .device-action, .switch { border: 0; color: var(--text); cursor: pointer; }
+.tab, .action-button, .device-action, .switch, .profile-control button { border: 0; color: var(--text); cursor: pointer; }
 .tab { padding: 16px 25px; border-radius: 16px; background: transparent; color: var(--muted); font-size: 20px; font-weight: 700; transition: .2s ease; }
 .tab.is-active { background: rgba(95,157,255,.16); color: white; }
 .tab:hover { color: white; background: rgba(255,255,255,.06); }
@@ -117,6 +117,17 @@ body[data-backend-state="streaming"] .bluetooth-core { animation: glow 2s ease-i
 .setting-card { min-height: 145px; padding: 30px; border: 1px solid var(--line); border-radius: 25px; background: var(--panel); display: flex; align-items: center; justify-content: space-between; gap: 25px; }
 .setting-card h3 { margin-bottom: 9px; }
 .setting-card p { margin: 0; color: var(--muted); font-size: 17px; }
+.setting-card .setting-note { margin-top: 8px; color: #7f8da8; font-size: 15px; }
+.profile-card, .diagnostics-card { grid-column: 1 / -1; }
+.profile-control { min-width: 290px; padding: 5px; border: 1px solid var(--line); border-radius: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; background: rgba(255,255,255,.035); }
+.profile-control button { min-height: 52px; padding: 10px 16px; border-radius: 12px; background: transparent; color: var(--muted); font-weight: 800; }
+.profile-control button.is-active { background: rgba(95,157,255,.24); color: white; box-shadow: inset 0 0 0 1px rgba(126,216,255,.18); }
+.profile-control button:disabled { opacity: .58; cursor: default; }
+.diagnostics-card { align-items: flex-start; }
+.diagnostics { min-width: 58%; margin: 0; display: grid; grid-template-columns: repeat(5, minmax(90px, 1fr)); gap: 10px; }
+.diagnostics div { padding: 14px; border-radius: 15px; background: rgba(255,255,255,.035); }
+.diagnostics dt { color: var(--muted); font-size: 13px; }
+.diagnostics dd { margin: 6px 0 0; color: #dce7ff; font-size: 17px; font-weight: 800; }
 .switch { width: 72px; height: 40px; padding: 4px; border-radius: 22px; background: #30374a; flex: 0 0 auto; transition: .2s ease; }
 .switch span { display: block; width: 32px; height: 32px; border-radius: 50%; background: white; transition: transform .2s ease; }
 .switch.is-on { background: var(--accent); }
@@ -146,6 +157,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 4px solid var(--focus)
   .hero-card { align-items: flex-start; flex-direction: column; }
   .hero-action { width: 100%; flex-basis: auto; }
   .action-button { width: 100%; }
+  .profile-card, .diagnostics-card { align-items: stretch; flex-direction: column; }
+  .profile-control, .diagnostics { min-width: 0; width: 100%; }
+  .diagnostics { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (max-width: 650px) {

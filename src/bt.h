@@ -1,11 +1,11 @@
 #include <stdint.h>
 
-/* The Bluetooth link to the headset: controller setup, pairing and
+/* The Bluetooth link to the audio device: controller setup, pairing and
  * reconnection, encryption, L2CAP channels and ACL flow control.
  *
  * Everything runs on one thread: callers pump the controller with bt_poll()
  * or bt_wait(), which dispatch whatever arrived. Only events about the
- * headset are acted on; the controller is shared with the system, whose
+ * selected audio device are acted on; the controller is shared with the system, whose
  * links on it are left alone.
  */
 #ifndef FGG_BT_H
@@ -47,20 +47,20 @@ void bt_clear_stop(void);
 /* Opens the controller and prepares it. Returns 0 on failure. */
 int  bt_start(void);
 
-/* Disconnects the headset if still linked and closes the controller. */
+/* Disconnects the audio device if still linked and closes the controller. */
 void bt_stop(void);
 
-/* Connects to the headset paired before (its key is kept in key_path), or
+/* Connects to the audio device paired before (its key is kept in key_path), or
  * pairs one found in pairing mode, and encrypts the link. Returns 0 on
  * failure, with the reason logged. */
 int  bt_connect(const char *key_path);
 
-/* Opens an L2CAP channel to `psm` on the headset and configures it. Frames
+/* Opens an L2CAP channel to `psm` on the audio device and configures it. Frames
  * that arrive on it go to `on_frame`. Returns 0 on failure. */
 int  bt_open_channel(l2cap_chan *ch, unsigned psm, bt_frame_fn on_frame);
 void bt_close_channel(l2cap_chan *ch);
 
-/* Sends one L2CAP frame to the headset's channel `dcid`. */
+/* Sends one L2CAP frame to the audio device's channel `dcid`. */
 int  bt_send(unsigned dcid, const unsigned char *data, int len);
 
 /* True while the controller has room for another ACL packet. */
@@ -76,7 +76,7 @@ void bt_poll(int timeout_ms);
  * 1 if the flag was set. */
 int  bt_wait(volatile int *flag, int timeout_ms);
 
-/* True once the headset has disconnected. */
+/* True once the audio device has disconnected. */
 int  bt_link_lost(void);
 
 /* Called about once a second while the link layer waits or streams. */

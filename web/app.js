@@ -9,25 +9,29 @@
   const deviceList = $('#deviceList');
   const savedList = $('#savedList');
   const activeCard = $('#activeCard');
-  const state = { status: null, devices: [], saved: [], updates: true };
+  const state = { status: null, devices: [], saved: [], updates: true, offline: false };
   let toastTimer;
 
   const translations = {
     en: {
       brandSubtitle: 'PS5 Bluetooth audio', tabDevices: 'Devices', tabSaved: 'Saved devices', tabSettings: 'Settings',
       wirelessAudio: 'Wireless audio', heroTitle: 'Choose where your PS5 should play', scan: 'Scan', scanningAction: 'Scanning…',
-      nearby: 'Nearby', bluetoothDevices: 'Bluetooth devices', noDevices: 'No devices yet',
-      noDevicesHint: 'Put your headphones in pairing mode, then choose Scan.', quickReconnect: 'Quick reconnect',
-      savedDevices: 'Saved devices', noSaved: 'No saved headphones', noSavedHint: 'A device appears here after its first successful pairing.',
+      nearby: 'Nearby', bluetoothDevices: 'Bluetooth audio devices', noDevices: 'No devices yet',
+      noDevicesHint: 'Put an A2DP/SBC device in pairing mode: headphones, an A2DP headset, speaker, soundbar, receiver or adapter.', quickReconnect: 'Quick reconnect',
+      savedDevices: 'Saved devices', noSaved: 'No saved audio devices', noSavedHint: 'A Bluetooth audio device appears here after its first successful pairing.',
       preferences: 'Preferences', settings: 'Settings', automaticUpdates: 'Automatic updates',
       automaticUpdatesHint: 'Refresh connection state in the background.', reduceMotion: 'Reduce motion',
       reduceMotionHint: 'Turn off decorative interface animation.', nativeBackend: 'Native backend', release: 'Release',
+      latencyProfile: 'Latency profile', latencyProfileHint: 'Low latency uses smaller RTP packets and trims stale queued audio more aggressively.',
+      latencyLimit: 'It cannot remove buffering inside the Bluetooth audio device.', profileStable: 'Stable', profileLowLatency: 'Low latency',
+      latencyDiagnostics: 'Stream diagnostics', latencyDiagnosticsHint: 'Measured in the capture, queue and RTP packetization path.',
+      packetDuration: 'Packet', queueDuration: 'Queue', maxQueueDuration: 'Max queue', trimmedAudio: 'Trimmed', frames: 'frames',
       navigate: 'Navigate', select: 'Select', streamFooter: 'AudioBridge streams with A2DP / SBC',
       online: 'Online', offline: 'Offline', found: (count) => `${count} found`, signal: 'Signal', saved: 'Saved',
       connect: 'Connect', disconnect: 'Disconnect', unknownDevice: 'Unknown device', currentDevice: 'Current device',
-      requestFailed: (code) => `Request failed (${code})`, cannotReach: 'Cannot reach the native backend.',
+      requestFailed: (code) => `Request failed (${code})`, cannotReach: 'AudioBridge payload is not responding. Start it on the PS5; this page will keep waiting.',
       status: {
-        starting: ['Starting', 'Preparing the Bluetooth controller…'], ready: ['Ready', 'Scan for nearby Bluetooth headphones and speakers.'],
+        starting: ['Starting', 'Preparing the Bluetooth controller…'], ready: ['Ready', 'Scan for a compatible Bluetooth audio device.'],
         scanning: ['Scanning', 'Looking for nearby audio devices…'], connecting: ['Connecting', 'Pairing and establishing a secure audio link…'],
         connected: ['Connected', 'Negotiating the A2DP audio stream…'], streaming: ['Streaming', 'PS5 audio is playing on the connected device.'],
         disconnecting: ['Disconnecting', 'Closing the audio stream safely…'], error: ['Needs attention', 'The backend reported a problem. Try again.'],
@@ -38,18 +42,22 @@
     ru: {
       brandSubtitle: 'Bluetooth-аудио для PS5', tabDevices: 'Устройства', tabSaved: 'Сохранённые', tabSettings: 'Настройки',
       wirelessAudio: 'Беспроводной звук', heroTitle: 'Выберите, где должна звучать ваша PS5', scan: 'Поиск', scanningAction: 'Идёт поиск…',
-      nearby: 'Рядом', bluetoothDevices: 'Bluetooth-устройства', noDevices: 'Устройств пока нет',
-      noDevicesHint: 'Переведите наушники в режим сопряжения и нажмите «Поиск».', quickReconnect: 'Быстрое подключение',
-      savedDevices: 'Сохранённые устройства', noSaved: 'Нет сохранённых наушников', noSavedHint: 'Устройство появится здесь после первого успешного сопряжения.',
+      nearby: 'Рядом', bluetoothDevices: 'Bluetooth-аудиоустройства', noDevices: 'Устройств пока нет',
+      noDevicesHint: 'Включите режим сопряжения на A2DP/SBC-устройстве: наушниках, гарнитуре в A2DP, колонке, саундбаре, ресивере или адаптере.', quickReconnect: 'Быстрое подключение',
+      savedDevices: 'Сохранённые устройства', noSaved: 'Нет сохранённых аудиоустройств', noSavedHint: 'Bluetooth-аудиоустройство появится здесь после первого успешного сопряжения.',
       preferences: 'Параметры', settings: 'Настройки', automaticUpdates: 'Автообновление',
       automaticUpdatesHint: 'Обновлять состояние подключения в фоне.', reduceMotion: 'Уменьшить анимацию',
       reduceMotionHint: 'Отключить декоративные анимации интерфейса.', nativeBackend: 'Нативный backend', release: 'Версия',
+      latencyProfile: 'Профиль задержки', latencyProfileHint: 'Low latency уменьшает RTP-пакеты и агрессивнее отбрасывает устаревший звук из очереди.',
+      latencyLimit: 'Профиль не устраняет внутренний буфер Bluetooth-аудиоустройства.', profileStable: 'Стабильный', profileLowLatency: 'Low latency',
+      latencyDiagnostics: 'Диагностика потока', latencyDiagnosticsHint: 'Измерения тракта захвата, очереди и RTP-пакетизации.',
+      packetDuration: 'Пакет', queueDuration: 'Очередь', maxQueueDuration: 'Макс. очередь', trimmedAudio: 'Отброшено', frames: 'кадров',
       navigate: 'Навигация', select: 'Выбрать', streamFooter: 'AudioBridge передаёт звук через A2DP / SBC',
       online: 'В сети', offline: 'Не в сети', found: (count) => `Найдено: ${count}`, signal: 'Сигнал', saved: 'Сохранено',
       connect: 'Подключить', disconnect: 'Отключить', unknownDevice: 'Неизвестное устройство', currentDevice: 'Текущее устройство',
-      requestFailed: (code) => `Ошибка запроса (${code})`, cannotReach: 'Нет связи с нативным backend.',
+      requestFailed: (code) => `Ошибка запроса (${code})`, cannotReach: 'Payload AudioBridge не отвечает. Запустите его на PS5 — эта страница продолжит ожидание.',
       status: {
-        starting: ['Запуск', 'Подготовка Bluetooth-контроллера…'], ready: ['Готово', 'Найдите Bluetooth-наушники или колонку поблизости.'],
+        starting: ['Запуск', 'Подготовка Bluetooth-контроллера…'], ready: ['Готово', 'Найдите совместимое Bluetooth-аудиоустройство.'],
         scanning: ['Поиск', 'Поиск Bluetooth-аудиоустройств поблизости…'], connecting: ['Подключение', 'Сопряжение и установка защищённого аудиосоединения…'],
         connected: ['Подключено', 'Настройка аудиопотока A2DP…'], streaming: ['Трансляция', 'Звук PS5 воспроизводится на подключённом устройстве.'],
         disconnecting: ['Отключение', 'Безопасное завершение аудиопотока…'], error: ['Требуется внимание', 'Backend сообщил об ошибке. Попробуйте ещё раз.'],
@@ -59,6 +67,8 @@
         'Bluetooth scan queued': 'Поиск Bluetooth-устройств запущен', 'Backend is busy': 'Backend занят другой операцией',
         'Connection queued': 'Подключение поставлено в очередь', 'Unknown device or backend is busy': 'Устройство не найдено или backend занят',
         'Disconnect requested': 'Отключение запрошено', 'No active connection': 'Нет активного подключения',
+        'Audio profile updated': 'Профиль задержки обновлён',
+        'Profile is invalid or streaming is active': 'Профиль нельзя изменить во время активного потока',
         'Bluetooth controller did not answer': 'Bluetooth-контроллер не ответил', 'Bluetooth connection failed': 'Не удалось подключиться по Bluetooth',
         'A2DP setup failed': 'Не удалось настроить A2DP', 'Unable to start Bluetooth scan': 'Не удалось запустить поиск Bluetooth'
       }
@@ -110,6 +120,7 @@
 
   function renderStatus(status) {
     state.status = status;
+    state.offline = false;
     document.body.dataset.backendState = status.status;
     const [label, message] = t('status')[status.status] || t('status').unknown;
     statusPill.className = `status-pill is-${status.status}`;
@@ -120,6 +131,19 @@
     scanButton.querySelector('span:last-child').textContent = status.status === 'scanning' ? t('scanningAction') : t('scan');
     $('#controllerState').textContent = status.controller ? t('online') : t('offline');
     $('#deviceCount').textContent = t('found')(status.deviceCount);
+    $$('[data-profile]').forEach((button) => {
+      const selected = button.dataset.profile === status.audioProfile;
+      button.classList.toggle('is-active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+      button.disabled = !['ready', 'error'].includes(status.status);
+    });
+
+    const latency = status.latency || {};
+    $('#packetDuration').textContent = latency.packetDurationUs ? `${(latency.packetDurationUs / 1000).toFixed(1)} ms` : '—';
+    $('#queueDuration').textContent = latency.streaming ? `${latency.queueMs} / ${latency.targetMaxQueueMs} ms` : '—';
+    $('#maxQueueDuration').textContent = latency.maxQueueMs ? `${latency.maxQueueMs} ms` : '—';
+    $('#trimmedAudio').textContent = latency.streaming || latency.trimmedFrames ? `${latency.trimmedFrames || 0} ${t('frames')}` : '—';
+    $('#bitpoolValue').textContent = latency.bitpool || '—';
 
     if (status.active) {
       activeCard.classList.remove('is-hidden');
@@ -129,6 +153,14 @@
     } else {
       activeCard.classList.add('is-hidden');
     }
+  }
+
+  function renderOffline() {
+    state.offline = true;
+    statusPill.className = 'status-pill is-error';
+    statusPill.querySelector('span').textContent = t('offline');
+    statusMessage.textContent = t('cannotReach');
+    $('#controllerState').textContent = t('offline');
   }
 
   function renderDevices(devices) {
@@ -152,10 +184,7 @@
       renderDevices(devices.devices);
       renderSaved(saved.devices);
     } catch (error) {
-      statusPill.className = 'status-pill is-error';
-      statusPill.querySelector('span').textContent = t('offline');
-      statusMessage.textContent = t('cannotReach');
-      $('#controllerState').textContent = t('offline');
+      renderOffline();
     }
   }
 
@@ -172,6 +201,8 @@
   const connect = (mac) => command('/api/connect', { mac });
   const disconnect = () => command('/api/disconnect');
   scanButton.addEventListener('click', () => command('/api/scan'));
+  $$('[data-profile]').forEach((button) => button.addEventListener('click', () =>
+    command('/api/audio-profile', { profile: button.dataset.profile })));
 
   $$('.tab').forEach((tab) => tab.addEventListener('click', () => {
     $$('.tab').forEach((item) => {
@@ -190,6 +221,7 @@
     $$('[data-language]').forEach((button) => button.classList.toggle('is-active', button.dataset.language === language));
     localStorage.setItem('audiobridge-language', language);
     if (state.status) renderStatus(state.status);
+    else if (state.offline) renderOffline();
     renderDevices(state.devices);
     renderSaved(state.saved);
   }
