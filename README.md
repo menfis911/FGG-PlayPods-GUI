@@ -1,7 +1,4 @@
-<p align="center">
-  <img src="logo.png" alt="FGG-PlayPods" width="820">
-</p>
-
+ПОКА В РАЗРАБОТКЕ, Альфа.
 <h1 align="center">FGG-PlayPods-GUI</h1>
 
 <p align="center">
